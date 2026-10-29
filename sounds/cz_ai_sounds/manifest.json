@@ -1,0 +1,179 @@
+{
+  "note": "Local use only. Do not upload these sounds to GitHub.",
+  "tags": {
+    "hype": {
+      "events": [
+        "good_play",
+        "round_won",
+        "match_won",
+        "player_clutch"
+      ],
+      "min_chat_style": "clean",
+      "files": [
+        "hype/01_hell_yeaaaaah.mp3",
+        "hype/02_oh_yeah_meme.mp3",
+        "hype/03_oh_yessss.mp3",
+        "hype/04_yessss_nathan_online_audio_converter.mp3",
+        "hype/05_yeahh_boiiiiiiii.mp3",
+        "hype/06_yeah_buddy_lightweight.mp3",
+        "hype/07_sheeshsoundeffect1.mp3",
+        "hype/08_maja_aaya.mp3",
+        "hype/09_mickey_mouse_oh_boy.mp3"
+      ]
+    },
+    "kill_headshot": {
+      "events": [
+        "bot_kill",
+        "headshot",
+        "multi_kill"
+      ],
+      "min_chat_style": "clean",
+      "files": [
+        "kill_headshot/01_boomheadshot_swf.mp3",
+        "kill_headshot/02_1_booom_1.mp3",
+        "kill_headshot/03_wtf_boom_sound_meme.mp3"
+      ]
+    },
+    "shock": {
+      "events": [
+        "surprise",
+        "close_call",
+        "bomb_planted",
+        "enemy_ace"
+      ],
+      "min_chat_style": "clean",
+      "files": [
+        "shock/01_oh_my_god_meme.mp3",
+        "shock/02_oh_my_god_bro_ah_hell_nah.mp3",
+        "shock/03_modis_oh_my_god.mp3",
+        "shock/04_kevin_heart_damn.mp3",
+        "shock/05_dammmm_daniel.mp3"
+      ]
+    },
+    "praise": {
+      "events": [
+        "player_good_play",
+        "teammate_good_play"
+      ],
+      "min_chat_style": "clean",
+      "files": [
+        "praise/01_modi_ji_wah.mp3",
+        "praise/02_gian_hain_aap.mp3",
+        "praise/03_sochna_pdta_hai_re_hindustani_bhau.mp3"
+      ]
+    },
+    "roast": {
+      "events": [
+        "player_misses",
+        "team_kill",
+        "teasing_player",
+        "bad_play",
+        "blame_teammate"
+      ],
+      "min_chat_style": "clean",
+      "files": [
+        "roast/01_bruh_sound_effect_wstdzdm.mp3",
+        "roast/02_ye_kya_bak_rahe_ho_mc.mp3",
+        "roast/03_is_sajjan_ko_kya_takleef_hai_bhai.mp3",
+        "roast/04_tejaswi_modi_can_be_used_as_a_taunt_to_t.mp3",
+        "roast/05_masti_dekho_bc_cid_dubbing.mp3",
+        "roast/06_is_ka_karan_narendar_modi.mp3"
+      ]
+    },
+    "hindi_swear": {
+      "events": [
+        "rage",
+        "tilt",
+        "big_fail",
+        "teasing_player"
+      ],
+      "min_chat_style": "banter",
+      "files": [
+        "hindi_swear/01_kyu_re_madarchod_cid.mp3",
+        "hindi_swear/02_lavden_bhojyam.mp3",
+        "hindi_swear/03_modi_ji_bkl.mp3",
+        "hindi_swear/04_there_a_guy_fucking_me_in_the_ass.mp3"
+      ]
+    },
+    "fail_sad": {
+      "events": [
+        "bot_death",
+        "round_lost",
+        "match_lost",
+        "bad_play"
+      ],
+      "min_chat_style": "clean",
+      "files": [
+        "fail_sad/01_spongebob_disappointed_sound_effect_isep.mp3",
+        "fail_sad/02_banana_cat_crying.mp3",
+        "fail_sad/03_depression_indian.mp3",
+        "fail_sad/04_modi_ji_rona_band_kijiye.mp3",
+        "fail_sad/05_faaah.mp3"
+      ]
+    },
+    "apology_getup": {
+      "events": [
+        "own_mistake",
+        "teammate_down"
+      ],
+      "min_chat_style": "clean",
+      "files": [
+        "apology_getup/01_hindi_guy_said_sorry.mp3",
+        "apology_getup/02_uth_jaa.mp3",
+        "apology_getup/03_bhai_ne_bola_karnekka.mp3"
+      ]
+    },
+    "shut_up": {
+      "events": [
+        "arguing",
+        "blame_teammate",
+        "spam_in_chat"
+      ],
+      "min_chat_style": "clean",
+      "files": [
+        "shut_up/01_shut_your_fckin_mouth.mp3",
+        "shut_up/02_you_shut_your_mouth_fatty.mp3",
+        "shut_up/03_get_out_meme.mp3"
+      ]
+    },
+    "greeting": {
+      "events": [
+        "match_start",
+        "round_start"
+      ],
+      "min_chat_style": "clean",
+      "files": [
+        "greeting/01_scout_yo_whats_up.mp3",
+        "greeting/02_what_39s_up_budweiser_commercial_mp3cut.mp3",
+        "greeting/03_quandale_dingle_v2.mp3",
+        "greeting/04_ha_got_eeem.mp3"
+      ]
+    },
+    "laugh": {
+      "events": [
+        "funny_moment",
+        "team_kill",
+        "player_fail",
+        "teasing_player"
+      ],
+      "min_chat_style": "clean",
+      "files": [
+        "laugh/01_ny_video_online_audio_converter.mp3",
+        "laugh/02_ayooogima.mp3",
+        "laugh/03_hi_hi_hi_ha_clash_royale.mp3"
+      ]
+    },
+    "goodbye": {
+      "events": [
+        "bot_kill",
+        "round_lost",
+        "match_lost",
+        "enemy_dead"
+      ],
+      "min_chat_style": "clean",
+      "files": [
+        "goodbye/01_tmp8ljn9e7h.mp3"
+      ]
+    }
+  }
+}

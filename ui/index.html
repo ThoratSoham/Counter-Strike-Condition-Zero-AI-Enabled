@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Condition Zero - AI Teammates Command Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: rgba(18, 24, 38, 0.85);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --accent: #f59e0b;
+      --accent-glow: rgba(245, 158, 11, 0.35);
+      --cyan: #06b6d4;
+      --green: #10b981;
+      --red: #ef4444;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(245, 158, 11, 0.08) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.08) 0px, transparent 50%);
+      color: var(--text);
+      font-family: 'Outfit', sans-serif;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .container { max-width: 1240px; margin: 0 auto; }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 24px;
+    }
+    .logo-area { display: flex; align-items: center; gap: 14px; }
+    .badge-cz {
+      background: linear-gradient(135deg, #d97706, #b45309);
+      color: #fff;
+      font-weight: 800;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      box-shadow: 0 4px 14px var(--accent-glow);
+    }
+    h1 { font-size: 24px; font-weight: 800; }
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--green);
+    }
+    .pulse-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 10px var(--green);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+    .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
+    @media(max-width: 960px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(16px);
+      border-radius: 16px;
+      padding: 22px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+    }
+    .card-title {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #fff;
+    }
+    .teammates-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+    .tm-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 16px;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .tm-card:hover { transform: translateY(-3px); border-color: rgba(245, 158, 11, 0.4); }
+    .tm-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .tm-name { font-size: 17px; font-weight: 700; color: #fff; }
+    .tm-role { font-size: 11px; color: var(--accent); font-weight: 700; text-transform: uppercase; }
+    .tm-tagline { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; min-height: 32px; }
+    .meter-label { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px; }
+    .meter-bar { height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; margin-bottom: 8px; }
+    .meter-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+    .fill-conf { background: var(--green); }
+    .fill-tilt { background: var(--red); }
+    .fill-stress { background: var(--accent); }
+    .btn {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #000;
+      border: none;
+      padding: 9px 16px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .btn:hover { opacity: 0.9; transform: scale(0.98); }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .btn-secondary:hover { background: rgba(255, 255, 255, 0.14); }
+    .btn-sm { padding: 5px 10px; font-size: 11px; border-radius: 6px; }
+    .check-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+    .check-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    .check-val { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 5px; color: var(--text-muted); }
+    input[type="text"], input[type="password"], select {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--card-border);
+      padding: 8px 12px;
+      border-radius: 8px;
+      color: #fff;
+      font-family: inherit;
+      font-size: 13px;
+    }
+    input[type="range"] { width: 100%; accent-color: var(--accent); }
+    .slider-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+    .console-box {
+      background: #050811;
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: #34d399;
+      height: 180px;
+      overflow-y: auto;
+    }
+    .test-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo-area">
+        <span class="badge-cz">CZ AI Mod</span>
+        <h1>AI Teammates Command Center</h1>
+      </div>
+      <div class="status-pill">
+        <div class="pulse-dot"></div>
+        <span id="service-status">Engine Active (Metamod + AMX Mod X)</span>
+      </div>
+    </header>
+
+    <div class="grid">
+      <!-- Left Column: Squad & Live Pipeline Feed -->
+      <div>
+        <div class="card">
+          <div class="card-title">
+            <span>Squad Roster & Emotional Meters</span>
+            <span style="font-size: 12px; color: var(--accent);">Banter: Full Gamer</span>
+          </div>
+          <div class="teammates-grid" id="teammates-container">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            <span>In-Game Test Commands (Part 1 Verification)</span>
+          </div>
+          <div class="test-actions">
+            <button class="btn btn-secondary btn-sm" onclick="runTestSay()">ai_test_say (Bot Chat Test)</button>
+            <button class="btn btn-secondary btn-sm" onclick="runTestPing()">ai_test_ping (Socket Roundtrip)</button>
+            <button class="btn btn-secondary btn-sm" onclick="runTestSound('hype')">ai_test_sound hype</button>
+            <button class="btn btn-secondary btn-sm" onclick="runTestSound('fail')">ai_test_sound fail</button>
+            <button class="btn btn-secondary btn-sm" onclick="runTestSound('clutch')">ai_test_sound clutch</button>
+            <button class="btn btn-secondary btn-sm" onclick="simulatePlayerChat('need help at B site')">Simulate "help" Chat</button>
+          </div>
+          <label>Unified Mod Pipeline Log (logs/mod.log)</label>
+          <div class="console-box" id="event-feed">
+            Loading mod log stream...
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Settings, Diagnostics & Meme Sound Controls -->
+      <div>
+        <div class="card">
+          <div class="card-title">
+            <span>System Diagnostics</span>
+            <button class="btn btn-secondary btn-sm" onclick="runDiagnostics()">Check Status</button>
+          </div>
+          <div class="check-list">
+            <div class="check-item">
+              <span>Metamod & AMX Mod X</span>
+              <span class="check-val" id="diag-plugin" style="color: var(--green);">INSTALLED</span>
+            </div>
+            <div class="check-item">
+              <span>Game UDP Socket</span>
+              <span class="check-val" style="color: var(--cyan);">127.0.0.1:27115</span>
+            </div>
+            <div class="check-item">
+              <span>AI Tier / Provider</span>
+              <span class="check-val" id="diag-api" style="color: var(--accent);">Local Reply Bank (0 Cost)</span>
+            </div>
+            <div class="check-item">
+              <span>Meme Sound Library</span>
+              <span class="check-val" id="diag-sounds" style="color: var(--green);">10 Tags Mapped</span>
+            </div>
+            <div class="check-item">
+              <span>Free Quota Remaining</span>
+              <span class="check-val" id="diag-quota" style="color: var(--cyan);">500 / 500</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Meme Sounds & Chat Settings</div>
+          
+          <div class="form-group">
+            <label>Chat Banter Level</label>
+            <select id="chat-style" onchange="saveSettings()">
+              <option value="full_gamer" selected>Full Gamer (Authentic gamer banter & swearing)</option>
+              <option value="banter">Banter (Moderate jokes & roasts)</option>
+              <option value="clean">Clean (No swearing, polite)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Meme Sound Frequency</label>
+            <select id="sound-freq" onchange="saveSettings()">
+              <option value="Normal" selected>Normal (1 sound every 4s max)</option>
+              <option value="Chatty">Chatty (1 sound every 2s max)</option>
+              <option value="Low">Low (Only major clutches / bombs)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Meme Sound Volume</label>
+            <input type="range" id="sound-vol" min="0" max="100" value="80" onchange="saveSettings()">
+            <div class="slider-labels">
+              <span>Mute</span>
+              <span>Normalized (80%)</span>
+              <span>100%</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Language</label>
+            <select id="lang-select" onchange="saveSettings()">
+              <option value="en" selected>English (Default)</option>
+              <option value="hi">Hinglish / Hindi</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Push-to-Talk Hotkey</label>
+            <input type="text" id="ptt-key" value="V" style="width: 80px; text-transform: uppercase;" onchange="saveSettings()">
+          </div>
+
+          <div class="form-group">
+            <label>Google Gemini API Key (Optional)</label>
+            <input type="password" id="gemini-key" placeholder="Paste free AI Studio key (optional)" onchange="saveSettings()">
+          </div>
+
+          <button class="btn" style="width: 100%;" onclick="saveSettings()">Save & Apply Settings</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function loadStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        renderTeammates(data.teammates || []);
+        if (data.energy) {
+          document.getElementById('diag-quota').innerText = data.energy.remaining + ' / ' + data.energy.limit;
+        }
+        if (data.logs) {
+          const feed = document.getElementById('event-feed');
+          feed.innerHTML = data.logs.join('<br>') || 'No logs recorded yet.';
+          feed.scrollTop = feed.scrollHeight;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function renderTeammates(list) {
+      const c = document.getElementById('teammates-container');
+      c.innerHTML = '';
+      list.forEach(tm => {
+        const card = document.createElement('div');
+        card.className = 'tm-card';
+        card.innerHTML = `
+          <div class="tm-header">
+            <span class="tm-name">${tm.name}</span>
+            <span class="tm-role">${tm.archetype}</span>
+          </div>
+          <div class="tm-tagline">${tm.tagline}</div>
+          <div class="meter-label"><span>Confidence</span><span>${tm.mood.confidence}%</span></div>
+          <div class="meter-bar"><div class="meter-fill fill-conf" style="width: ${tm.mood.confidence}%"></div></div>
+          <div class="meter-label"><span>Tilt</span><span>${tm.mood.tilt}%</span></div>
+          <div class="meter-bar"><div class="meter-fill fill-tilt" style="width: ${tm.mood.tilt}%"></div></div>
+          <div class="meter-label"><span>Stress</span><span>${tm.mood.stress}%</span></div>
+          <div class="meter-bar"><div class="meter-fill fill-stress" style="width: ${tm.mood.stress}%"></div></div>
+        `;
+        c.appendChild(card);
+      });
+    }
+
+    async function runTestSay() {
+      await fetch('/api/test_say');
+      loadStatus();
+    }
+
+    async function runTestPing() {
+      await fetch('/api/test_ping');
+      loadStatus();
+    }
+
+    async function runTestSound(tag) {
+      await fetch('/api/test_sound?tag=' + tag);
+      loadStatus();
+    }
+
+    async function simulatePlayerChat(msg) {
+      await fetch('/api/simulate_chat?msg=' + encodeURIComponent(msg));
+      loadStatus();
+    }
+
+    async function runDiagnostics() {
+      const res = await fetch('/api/diagnostics');
+      const data = await res.json();
+      document.getElementById('diag-api').innerText = data.api_provider;
+      loadStatus();
+    }
+
+    async function saveSettings() {
+      const payload = {
+        chat_style: document.getElementById('chat-style').value,
+        sound_frequency: document.getElementById('sound-freq').value,
+        sound_volume: parseInt(document.getElementById('sound-vol').value) / 100.0,
+        language: document.getElementById('lang-select').value,
+        push_to_talk_key: document.getElementById('ptt-key').value,
+        gemini_api_key: document.getElementById('gemini-key').value
+      };
+      await fetch('/api/save_config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      loadStatus();
+    }
+
+    setInterval(loadStatus, 2000);
+    loadStatus();
+  </script>
+</body>
+</html>

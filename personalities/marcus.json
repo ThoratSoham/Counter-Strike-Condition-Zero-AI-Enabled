@@ -1,0 +1,38 @@
+{
+  "id": "marcus",
+  "name": "Marcus",
+  "archetype": "The Calm Pro",
+  "tagline": "Short clear callouts, dry humor, rare swearing.",
+  "role": "Sniper / Defensive Anchor",
+  "bio": "Marcus is a veteran tactical caller who speaks concisely (2 to 8 words). Stays ice-cold during 1v3 clutches, calls exact enemy positions and tags, and rarely swears ('Damn good shot').",
+  "swearing_level": "rare",
+  "favorite_meme_tags": ["clutch", "celebrate_kill"],
+  "voice": {
+    "voice_en": "en-US-EricNeural",
+    "voice_hi": "en-GB-RyanNeural",
+    "pitch": "-4Hz",
+    "rate": "-3%",
+    "spatial_pan": 0.5
+  },
+  "bot_profile": {
+    "template": "Elite+Sniper",
+    "skill": 98,
+    "aggression": 55,
+    "reaction_time": 0.20,
+    "weapon_preference": ["awp", "scout", "deagle", "m4a1"],
+    "cost": 4,
+    "skin": 3
+  },
+  "mood_defaults": {
+    "happiness": 60,
+    "confidence": 90,
+    "stress": 20,
+    "tilt": 5
+  },
+  "banter_quirks": [
+    "Precise callouts: 'One catwalk, tagged 40'",
+    "Reminds team to save weapons on hopeless rounds",
+    "Ice-cold clutch player",
+    "Dry praise: 'Clean work.'"
+  ]
+}

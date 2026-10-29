@@ -1,0 +1,388 @@
+{
+  "vikram": {
+    "kill_normal": [
+      {"text": "Sit down! One down, push up!", "emotion": "hyped"},
+      {"text": "Got him! Don't let them rotate!", "emotion": "assertive"},
+      {"text": "Target dropped. Keep moving!", "emotion": "aggressive"}
+    ],
+    "kill_headshot": [
+      {"text": "Boom! Right in the face!", "emotion": "hyped"},
+      {"text": "Clean headshot, clean! Who is next?!", "emotion": "excited"},
+      {"text": "One tapped! Don't ever peek me!", "emotion": "smug"}
+    ],
+    "kill_knife": [
+      {"text": "HAHA! Sliced him up! That is embarrassing!", "emotion": "laughing"},
+      {"text": "Get knifed, loser!", "emotion": "sarcastic"}
+    ],
+    "kill_multikill": [
+      {"text": "I am on fire today! Two down, let's go!", "emotion": "hyped"},
+      {"text": "They cannot touch me! Push B, wipe them all!", "emotion": "screaming"}
+    ],
+    "death_normal": [
+      {"text": "Ugh, I'm down! He was waiting right there!", "emotion": "annoyed"},
+      {"text": "Hit him for 80, finish him!", "emotion": "urgent"},
+      {"text": "Man! Watch out on the right!", "emotion": "frustrated"}
+    ],
+    "death_camped": [
+      {"text": "Are you serious?! Camping in the darkest corner like a coward!", "emotion": "angry"},
+      {"text": "Bro! Who sits there with a shotgun?! Unbelievable!", "emotion": "tilted"},
+      {"text": "Total rat gameplay! Watch that corner!", "emotion": "disgusted"}
+    ],
+    "death_awp": [
+      {"text": "AWP holding the long angle! Don't peek him!", "emotion": "urgent"},
+      {"text": "One shot through the smoke, unbelievable!", "emotion": "frustrated"}
+    ],
+    "round_start_normal": [
+      {"text": "Alright, full buy! Let's smash them this round!", "emotion": "confident"},
+      {"text": "Stick together, fast push, don't stop!", "emotion": "assertive"}
+    ],
+    "round_start_eco": [
+      {"text": "Save round. Deagle and armor, make every bullet count.", "emotion": "serious"},
+      {"text": "Eco round! Just hunt for weapon drops!", "emotion": "aggressive"}
+    ],
+    "round_win_easy": [
+      {"text": "Too easy! They are literally shaking!", "emotion": "laughing"},
+      {"text": "Clean round, boys! Flawless!", "emotion": "hyped"}
+    ],
+    "round_win_close": [
+      {"text": "YES! My heart was pounding, great round!", "emotion": "relieved"},
+      {"text": "That was way too close! Good job everyone!", "emotion": "excited"}
+    ],
+    "round_loss": [
+      {"text": "Damn it! We threw that away, refocus!", "emotion": "annoyed"},
+      {"text": "Shake it off, we take the next one easily.", "emotion": "determined"}
+    ],
+    "round_loss_tilted": [
+      {"text": "Come on guys, what are we doing?! Stop giving away free kills!", "emotion": "angry"},
+      {"text": "I am so done with these mistakes! Play together!", "emotion": "tilted"}
+    ],
+    "bomb_planted": [
+      {"text": "Bomb is down! Move, move, we need to retake now!", "emotion": "urgent"},
+      {"text": "They planted! Check your angles, flash in together!", "emotion": "shouting"}
+    ],
+    "bomb_defusing": [
+      {"text": "I'm defusing, cover the cross!", "emotion": "tense"},
+      {"text": "Hold them off, stick the defuse!", "emotion": "urgent"}
+    ],
+    "bomb_defused": [
+      {"text": "Defused! That was clutch, let's go!", "emotion": "relieved"},
+      {"text": "Boom neutralized! Good cover!", "emotion": "confident"}
+    ],
+    "clutch_situation": [
+      {"text": "You got this bro, keep quiet, listen to footsteps.", "emotion": "whispering"},
+      {"text": "Take your time, one by one. You're better than them.", "emotion": "calm"}
+    ],
+    "player_clutch_won": [
+      {"text": "NO WAY! YOU ACTUALLY CLUTCHED THAT! WHAT A GOD!", "emotion": "screaming"},
+      {"text": "UNREAL! Best play I've seen all week!", "emotion": "hyped"}
+    ],
+    "friendly_fire": [
+      {"text": "Bro, watch your fire! I'm on your team!", "emotion": "annoyed"},
+      {"text": "Hey! Shoot the guys with the AKs, not me!", "emotion": "frustrated"}
+    ],
+    "order_follow": [
+      {"text": "On your six! Lead the way!", "emotion": "assertive"},
+      {"text": "Right behind you, let's push!", "emotion": "confident"}
+    ],
+    "order_rush": [
+      {"text": "RUSH B! NO BRAKES! GO GO GO!", "emotion": "screaming"},
+      {"text": "Pushing aggressively, clear the site!", "emotion": "hyped"}
+    ],
+    "order_hold": [
+      {"text": "Holding this angle, they won't pass.", "emotion": "serious"},
+      {"text": "Locked down here, waiting for them.", "emotion": "calm"}
+    ],
+    "order_save": [
+      {"text": "Falling back, saving my weapon.", "emotion": "disappointed"},
+      {"text": "Not worth peeking, saving credits.", "emotion": "calm"}
+    ]
+  },
+  "kabir": {
+    "kill_normal": [
+      {"text": "Sent him to spectator mode! Easy!", "emotion": "laughing"},
+      {"text": "Did he forget to turn his monitor on? Got him!", "emotion": "sarcastic"},
+      {"text": "Dropped! Thank you for the donation!", "emotion": "playful"}
+    ],
+    "kill_headshot": [
+      {"text": "Ding! Right on the helmet! Beautiful!", "emotion": "excited"},
+      {"text": "Calculated headshot. Totally on purpose!", "emotion": "joking"}
+    ],
+    "kill_knife": [
+      {"text": "HE JUST GOT BUTTERED! Someone clip that!", "emotion": "laughing"},
+      {"text": "Ninja backstab! You love to see it!", "emotion": "humorous"}
+    ],
+    "kill_multikill": [
+      {"text": "Call me the garbage man, cleaning up the whole site!", "emotion": "joking"},
+      {"text": "Two kills in two seconds! I might be a pro after all!", "emotion": "hyped"}
+    ],
+    "death_normal": [
+      {"text": "Okay, my mouse definitely lagged there. He's at A!", "emotion": "joking"},
+      {"text": "Ouch! Someone avenge my handsome face!", "emotion": "playful"},
+      {"text": "I tripped! Okay fine, he shot me. One low on health!", "emotion": "chuckle"}
+    ],
+    "death_camped": [
+      {"text": "Bro is paying rent in that corner! Be careful there!", "emotion": "sarcastic"},
+      {"text": "He literally took a nap behind that box, watch out!", "emotion": "laughing"}
+    ],
+    "death_awp": [
+      {"text": "Got deleted from the server! Don't peek that sniper!", "emotion": "shocked"},
+      {"text": "Yep, that was an AWP. I felt that in real life.", "emotion": "sarcastic"}
+    ],
+    "round_start_normal": [
+      {"text": "Time to click heads and take names, let's roll!", "emotion": "cheerful"},
+      {"text": "Remember boys: shoot the bad guys, don't get shot.", "emotion": "joking"}
+    ],
+    "round_start_eco": [
+      {"text": "Eco round! P90 rush or bust, let's pray to the CS gods!", "emotion": "humorous"},
+      {"text": "I have four dollars and a flashbang. Watch this play!", "emotion": "playful"}
+    ],
+    "round_win_easy": [
+      {"text": "Were those bots or actual people? Easiest round of my life!", "emotion": "laughing"},
+      {"text": "Flawless victory! Do they even practice?", "emotion": "sarcastic"}
+    ],
+    "round_win_close": [
+      {"text": "Phew! My hands are actually sweating, nice work!", "emotion": "relieved"},
+      {"text": "Never doubted us for a single millisecond!", "emotion": "grinning"}
+    ],
+    "round_loss": [
+      {"text": "Well... that didn't go according to plan, haha!", "emotion": "laughing"},
+      {"text": "Next round is our comeback arc, trust the process!", "emotion": "cheerful"}
+    ],
+    "round_loss_tilted": [
+      {"text": "Okay guys, the joke isn't funny anymore, let's actually win one!", "emotion": "sarcastic"},
+      {"text": "Vikram, don't break your desk bro, we got this next round!", "emotion": "teasing"}
+    ],
+    "bomb_planted": [
+      {"text": "Clock is ticking! Retake time, don't step on Legos!", "emotion": "urgent"},
+      {"text": "Bomb planted! Let's crash their party!", "emotion": "excited"}
+    ],
+    "bomb_defusing": [
+      {"text": "Cutting the blue wire... or was it red?! Covering defuse!", "emotion": "joking"},
+      {"text": "Stick it, I'll bodyblock the bullets!", "emotion": "urgent"}
+    ],
+    "bomb_defused": [
+      {"text": "Bomb defused! Where is my medal?!", "emotion": "cheerful"},
+      {"text": "Crisis averted! Good job team!", "emotion": "relieved"}
+    ],
+    "clutch_situation": [
+      {"text": "All on you hero! Make them look silly!", "emotion": "whispering"},
+      {"text": "He has no idea where you are, easy 1v1.", "emotion": "calm"}
+    ],
+    "player_clutch_won": [
+      {"text": "HOLY SMOKES! THAT WAS DISGUSTING! Teach me your ways!", "emotion": "hyped"},
+      {"text": "I am bowing down! Absolute legend!", "emotion": "laughing"}
+    ],
+    "friendly_fire": [
+      {"text": "Ow! Hey, friendly fire isn't so friendly, dude!", "emotion": "laughing"},
+      {"text": "Are my colors confusing you?! I'm with you!", "emotion": "teasing"}
+    ],
+    "order_follow": [
+      {"text": "Copy that boss, shadowing you!", "emotion": "cheerful"},
+      {"text": "I am your personal bodyguard now, let's go!", "emotion": "playful"}
+    ],
+    "order_rush": [
+      {"text": "Rush mode activated! Hold W!", "emotion": "excited"},
+      {"text": "No hesitation, straight in!", "emotion": "cheerful"}
+    ],
+    "order_hold": [
+      {"text": "Camping like a pro, nobody gets past me.", "emotion": "calm"},
+      {"text": "Holding steady, baiting the trap.", "emotion": "whispering"}
+    ],
+    "order_save": [
+      {"text": "Tactical retreat! My weapon is too pretty to lose.", "emotion": "joking"},
+      {"text": "Saving mode engaged, see you next round!", "emotion": "cheerful"}
+    ]
+  },
+  "marcus": {
+    "kill_normal": [
+      {"text": "Target eliminated. Sector secure.", "emotion": "calm"},
+      {"text": "One hostile down. Keep spacing.", "emotion": "precise"},
+      {"text": "Neutralized. Watching the flank.", "emotion": "focused"}
+    ],
+    "kill_headshot": [
+      {"text": "Headshot confirmed. Crosshair was locked.", "emotion": "cool"},
+      {"text": "Clean shot. One less angle to clear.", "emotion": "calm"}
+    ],
+    "kill_knife": [
+      {"text": "Silent takedown. Area clear.", "emotion": "whispering"},
+      {"text": "Knifed. Efficient work.", "emotion": "calm"}
+    ],
+    "kill_multikill": [
+      {"text": "Two hostiles neutralized. Site is opening up.", "emotion": "focused"},
+      {"text": "Triple down. Advance together.", "emotion": "controlled"}
+    ],
+    "death_normal": [
+      {"text": "Down at connector. Hostile tagged for 50.", "emotion": "calm"},
+      {"text": "Crossfire got me. Watch catwalk, two remaining.", "emotion": "precise"},
+      {"text": "Eliminated. Killer is moving towards bomb site.", "emotion": "informative"}
+    ],
+    "death_camped": [
+      {"text": "Hostile holding deep corner with shotgun. Check tight angles.", "emotion": "informative"},
+      {"text": "Unorthodox spot behind the barrels. Flash before clearing.", "emotion": "tactical"}
+    ],
+    "death_awp": [
+      {"text": "Sniper active down Long. Smoke cross recommended.", "emotion": "serious"},
+      {"text": "AWP locked on middle. Do not dry peek.", "emotion": "warning"}
+    ],
+    "round_start_normal": [
+      {"text": "Standard setup. Marcus watching mid. Good luck team.", "emotion": "calm"},
+      {"text": "Full buy secured. Trade frags effectively.", "emotion": "professional"}
+    ],
+    "round_start_eco": [
+      {"text": "Eco round. Play for weapon drops, do not overcommit.", "emotion": "disciplined"},
+      {"text": "Save credits. Crossfire with pistols only.", "emotion": "tactical"}
+    ],
+    "round_win_easy": [
+      {"text": "Disciplined execution. Well played.", "emotion": "approving"},
+      {"text": "Textbook round. Maintain this structure.", "emotion": "calm"}
+    ],
+    "round_win_close": [
+      {"text": "Good composure under pressure. Solid round.", "emotion": "relieved"},
+      {"text": "Excellent team trades at the end. Well done.", "emotion": "approving"}
+    ],
+    "round_loss": [
+      {"text": "Mistakes were made on rotations. Reset mental.", "emotion": "calm"},
+      {"text": "Economies will balance. Focus on next round positioning.", "emotion": "steady"}
+    ],
+    "round_loss_tilted": [
+      {"text": "We need communication. Call your flashes and hold trades.", "emotion": "authoritative"},
+      {"text": "Take a breath. Stick to fundamental angles.", "emotion": "calm"}
+    ],
+    "bomb_planted": [
+      {"text": "Bomb planted. 45 seconds on timer. Synchronize entry.", "emotion": "urgent"},
+      {"text": "Retake initiated. Flash high, check default first.", "emotion": "focused"}
+    ],
+    "bomb_defusing": [
+      {"text": "Defusing. Hold perimeter.", "emotion": "tense"},
+      {"text": "Securing the bomb defuse, 5 seconds.", "emotion": "calm"}
+    ],
+    "bomb_defused": [
+      {"text": "Bomb successfully defused. Site secured.", "emotion": "calm"},
+      {"text": "Threat neutralized. Clean work.", "emotion": "approving"}
+    ],
+    "clutch_situation": [
+      {"text": "You have the advantage. He has to defuse. Play time.", "emotion": "whispering"},
+      {"text": "Footsteps right. Hold crosshair head height.", "emotion": "whispering"}
+    ],
+    "player_clutch_won": [
+      {"text": "Outstanding clutch. Ice in your veins.", "emotion": "impressed"},
+      {"text": "Exceptional patience on that angle. Well played.", "emotion": "approving"}
+    ],
+    "friendly_fire": [
+      {"text": "Check targets. You clipped my armor.", "emotion": "firm"},
+      {"text": "Friendly fire. Re-adjust your spread.", "emotion": "calm"}
+    ],
+    "order_follow": [
+      {"text": "Acknowledged. Providing rear cover.", "emotion": "disciplined"},
+      {"text": "On your flank. Ready to trade.", "emotion": "focused"}
+    ],
+    "order_rush": [
+      {"text": "Executing rush. Clear corners fast.", "emotion": "focused"},
+      {"text": "Speed and aggression. Moving in.", "emotion": "assertive"}
+    ],
+    "order_hold": [
+      {"text": "Holding angle. Sightline established.", "emotion": "calm"},
+      {"text": "Anchor position locked.", "emotion": "precise"}
+    ],
+    "order_save": [
+      {"text": "Saving weapon. Falling back to spawn.", "emotion": "disciplined"},
+      {"text": "Conceding the round to preserve economy.", "emotion": "calm"}
+    ]
+  },
+  "sunny": {
+    "kill_normal": [
+      {"text": "I got him! Did you see that?! I got him!", "emotion": "excited"},
+      {"text": "Yes! One enemy down! P90 never fails!", "emotion": "happy"},
+      {"text": "Down! Oh man, my hands are shaking!", "emotion": "nervous_happy"}
+    ],
+    "kill_headshot": [
+      {"text": "Whoa! I got a headshot! Pure skill, or pure luck!", "emotion": "surprised"},
+      {"text": "Headshot! Wow, that sounded so satisfying!", "emotion": "excited"}
+    ],
+    "kill_knife": [
+      {"text": "I knifed him! I actually knifed him! OMG!", "emotion": "screaming"},
+      {"text": "Knife kill! I feel like a real ninja now!", "emotion": "ecstatic"}
+    ],
+    "kill_multikill": [
+      {"text": "TWO KILLS! GUYS, I GOT TWO KILLS! WE ARE WINNING THIS!", "emotion": "screaming"},
+      {"text": "I'm helping! Look at the scoreboard!", "emotion": "happy"}
+    ],
+    "death_normal": [
+      {"text": "Ah! He shot me from the tunnel, I'm sorry guys!", "emotion": "apologetic"},
+      {"text": "Ouch! He was so fast! Be careful there!", "emotion": "scared"},
+      {"text": "I panicked and missed my spray, sorry team!", "emotion": "sad"}
+    ],
+    "death_camped": [
+      {"text": "He was hiding in the corner! He scared the life out of me!", "emotion": "gasping"},
+      {"text": "Why was he standing there?! Watch out!", "emotion": "frightened"}
+    ],
+    "death_awp": [
+      {"text": "I peeked and instantly vaporized! It's an AWP!", "emotion": "scared"},
+      {"text": "Big sniper shot, don't go that way!", "emotion": "warning"}
+    ],
+    "round_start_normal": [
+      {"text": "Okay, I bought armor and an SMG! I'm ready!", "emotion": "eager"},
+      {"text": "Should I follow you? I'll follow you!", "emotion": "enthusiastic"}
+    ],
+    "round_start_eco": [
+      {"text": "I only have 300 dollars... should I buy a flashbang?", "emotion": "hesitant"},
+      {"text": "Eco round! I'll try my best with the Glock!", "emotion": "determined"}
+    ],
+    "round_win_easy": [
+      {"text": "We won! That was amazing, you guys are so good!", "emotion": "admiring"},
+      {"text": "Woohoo! Another round for us!", "emotion": "cheerful"}
+    ],
+    "round_win_close": [
+      {"text": "Oh my gosh, I was holding my breath the whole time!", "emotion": "relieved"},
+      {"text": "We actually won that?! Best team ever!", "emotion": "ecstatic"}
+    ],
+    "round_loss": [
+      {"text": "Aw man, that's okay, we can still win the match!", "emotion": "encouraging"},
+      {"text": "My bad guys, I'll do better next round!", "emotion": "apologetic"}
+    ],
+    "round_loss_tilted": [
+      {"text": "Please don't be mad guys, we can turn this around!", "emotion": "nervous"},
+      {"text": "Don't give up! I believe in us!", "emotion": "hopeful"}
+    ],
+    "bomb_planted": [
+      {"text": "Oh no, the bomb is planted! Where do I go?!", "emotion": "panicked"},
+      {"text": "Beeping is fast! We need to defuse right now!", "emotion": "urgent"}
+    ],
+    "bomb_defusing": [
+      {"text": "I have a defuse kit! Defusing now, protect me please!", "emotion": "nervous"},
+      {"text": "Defusing defusing defusing! Almost there!", "emotion": "tense"}
+    ],
+    "bomb_defused": [
+      {"text": "I defused it! WE SAVED THE DAY!", "emotion": "screaming_happy"},
+      {"text": "Phew! Wire cut! We did it!", "emotion": "relieved"}
+    ],
+    "clutch_situation": [
+      {"text": "You can do this! We are all watching you!", "emotion": "whispering"},
+      {"text": "He's low HP, just one burst!", "emotion": "whispering"}
+    ],
+    "player_clutch_won": [
+      {"text": "HOW DID YOU DO THAT?! YOU ARE A MONSTER! WOW!", "emotion": "screaming"},
+      {"text": "THAT WAS INCREDIBLE! I want to play like you one day!", "emotion": "ecstatic"}
+    ],
+    "friendly_fire": [
+      {"text": "SORRY! SORRY! I didn't mean to shoot you! Total accident!", "emotion": "panicked"},
+      {"text": "Ah! Don't shoot me back, I thought you were an enemy!", "emotion": "apologetic"}
+    ],
+    "order_follow": [
+      {"text": "Right behind you! Covering your back!", "emotion": "eager"},
+      {"text": "I'm on you! Don't leave me alone!", "emotion": "nervous_eager"}
+    ],
+    "order_rush": [
+      {"text": "Rushing! Ahhhh, let's do this!", "emotion": "excited"},
+      {"text": "Following the push! Spraying and praying!", "emotion": "eager"}
+    ],
+    "order_hold": [
+      {"text": "Holding right here, staring at the door!", "emotion": "focused"},
+      {"text": "Not moving an inch!", "emotion": "serious"}
+    ],
+    "order_save": [
+      {"text": "Okay, running away to save my gun!", "emotion": "obedient"},
+      {"text": "Saving! Hiding in spawn!", "emotion": "relieved"}
+    ]
+  }
+}

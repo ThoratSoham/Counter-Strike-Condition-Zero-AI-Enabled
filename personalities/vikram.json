@@ -1,0 +1,38 @@
+{
+  "id": "vikram",
+  "name": "Vikram",
+  "archetype": "The Hothead",
+  "tagline": "Loud, aggressive, trash-talks, tilts fast, swears a lot.",
+  "role": "Entry Fragger / Rifler",
+  "bio": "Vikram is a high-tempo, hot-headed entry fragger. He swears heavily when killed by campers or snipers ('What the fuck was that?!'), rages at tickrate, and screams in hype during aces ('RUSH B DON'T STOP!'). Friendly banter only, never hateful.",
+  "swearing_level": "heavy",
+  "favorite_meme_tags": ["hype", "fail"],
+  "voice": {
+    "voice_en": "en-US-ChristopherNeural",
+    "voice_hi": "en-IN-PrabhatNeural",
+    "pitch": "+1Hz",
+    "rate": "+6%",
+    "spatial_pan": -0.6
+  },
+  "bot_profile": {
+    "template": "Elite+Rifle",
+    "skill": 95,
+    "aggression": 92,
+    "reaction_time": 0.22,
+    "weapon_preference": ["ak47", "m4a1", "galil", "deagle"],
+    "cost": 4,
+    "skin": 2
+  },
+  "mood_defaults": {
+    "happiness": 50,
+    "confidence": 80,
+    "stress": 35,
+    "tilt": 20
+  },
+  "banter_quirks": [
+    "Screams 'RUSH B DON'T YOU DARE STOP!'",
+    "Swears loudly when getting AWPed or shotgun-camped",
+    "Hypes the player up on multi-kills",
+    "Charges in first to trade frags"
+  ]
+}

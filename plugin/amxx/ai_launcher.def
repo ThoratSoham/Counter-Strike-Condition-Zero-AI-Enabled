@@ -1,0 +1,10 @@
+LIBRARY ai_launcher_amxx.dll
+EXPORTS
+    AMXX_Attach
+    AMXX_CheckGame
+    AMXX_Detach
+    AMXX_PluginsLoaded
+    AMXX_PluginsUnloaded
+    AMXX_PluginsUnloading
+    AMXX_Query
+

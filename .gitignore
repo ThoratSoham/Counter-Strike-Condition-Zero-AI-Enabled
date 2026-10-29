@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+venv/
+env/
+
+# Mod Config & Secrets
+config.json
+*.key
+
+# Large Installer Archive (>100MB GitHub limit) & Crash Dumps
+Condition_Zero.exe
+*.mdmp
+
+# Runtime Logs & Temporary Files
+logs/
+errorlogs/
+czero/logs/*.log
+czero/addons/amxmodx/logs/*.log
+brain/memory.json
+stt_temp.wav
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
