@@ -66,6 +66,14 @@
 #define TASK_ROUND_START   1001
 #define TASK_COUNTDOWN     1002
 #define TASK_AI_TICK       1003
+#define TASK_MONSTER_MOVE  1008
+
+new g_debugTracesThisSec = 0;
+new g_debugTracesLastSec = 0;
+new Float:g_lastTraceResetTime = 0.0;
+new bool:g_modePendingChange = false;
+new Float:g_monsterGoalPos[3];
+new Float:g_monsterMoveSpeed = 0.0;
 #define TASK_HEARTBEAT     1004
 #define TASK_HEALTHBAR     1005
 #define TASK_BOT_REACT     1006
@@ -139,7 +147,9 @@ enum BotBrainState {
 // CVars - Core & Difficulty
 new g_cvarEnabled;
 new g_cvarGameMode;           // 0=Survivors vs Monster (Co-op), 1=Both Teams vs Monster
-new g_cvarDifficulty;         // 0=Easy, 1=Normal, 2=Nightmare, 3=Custom
+new g_cvarDifficulty;
+new g_cvarTraceBudget;
+new g_cvarTint;         // 0=Easy, 1=Normal, 2=Nightmare, 3=Custom
 new g_cvarHealth;
 new g_cvarSpeedWalk;
 new g_cvarSpeedRun;
@@ -217,6 +227,37 @@ new Float:g_investigatePos[3];
 new Float:g_sensePos[3];
 new Float:g_staggerEndTime = 0.0;
 new Float:g_offGroundDuration = 0.0;
+
+stock stop_all_monster_sounds() {
+    new max_clients = get_maxplayers();
+    for (new i = 1; i <= max_clients; i++) {
+        if (!is_user_connected(i)) continue;
+        emit_sound(i, CHAN_STATIC, SOUND_HEARTBEAT, 0.0, 0.0, SND_STOP, PITCH_NORM);
+        client_cmd(i, "stopsound");
+    }
+    if (g_monsterEnt > 0 && is_valid_ent(g_monsterEnt)) {
+        emit_sound(g_monsterEnt, CHAN_VOICE,  SOUND_ALERT1,     0.0, 0.0, SND_STOP, PITCH_NORM);
+        emit_sound(g_monsterEnt, CHAN_VOICE,  SOUND_ALERT2,     0.0, 0.0, SND_STOP, PITCH_NORM);
+        emit_sound(g_monsterEnt, CHAN_VOICE,  SOUND_ALERT3,     0.0, 0.0, SND_STOP, PITCH_NORM);
+        emit_sound(g_monsterEnt, CHAN_VOICE,  SOUND_IDLE1,      0.0, 0.0, SND_STOP, PITCH_NORM);
+        emit_sound(g_monsterEnt, CHAN_WEAPON, SOUND_ATTACK1,    0.0, 0.0, SND_STOP, PITCH_NORM);
+        emit_sound(g_monsterEnt, CHAN_WEAPON, SOUND_ATTACK2,    0.0, 0.0, SND_STOP, PITCH_NORM);
+        emit_sound(g_monsterEnt, CHAN_BODY,   SOUND_PAIN1,      0.0, 0.0, SND_STOP, PITCH_NORM);
+        emit_sound(g_monsterEnt, CHAN_ITEM,   SOUND_STOMP,      0.0, 0.0, SND_STOP, PITCH_NORM);
+        emit_sound(g_monsterEnt, CHAN_STATIC, SOUND_SPIT_LAUNCH, 0.0, 0.0, SND_STOP, PITCH_NORM);
+        emit_sound(g_monsterEnt, CHAN_AUTO,   SOUND_STING,      0.0, 0.0, SND_STOP, PITCH_NORM);
+    }
+}
+
+stock Float:approach_angle(Float:target, Float:current, Float:speed) {
+    new Float:diff = target - current;
+    while (diff < -180.0) diff += 360.0;
+    while (diff > 180.0) diff -= 360.0;
+    if (diff > speed) return current + speed;
+    if (diff < -speed) return current - speed;
+    return target;
+}
+
 
 // Health Phases & Combat Memory
 new g_currentPhase = 1;                     // 1 = 100-66%, 2 = 66-33%, 3 = <33%
@@ -394,6 +435,7 @@ stock apply_difficulty_settings() {
 public plugin_precache() {
     // Precache unified standalone zombie model (all sequence groups & textures merged).
     precache_model(MODEL_ZOMBIE);
+    precache_model("models/zombiet.mdl");
 
     precache_sound(SOUND_ALERT1);
     precache_sound(SOUND_ALERT2);
@@ -446,7 +488,9 @@ public plugin_init() {
     register_plugin(PLUGIN_NAME, PLUGIN_VERSION, PLUGIN_AUTHOR);
 
     // CVars - Core & Presets
-    g_cvarEnabled          = register_cvar("mh_enabled", "1");
+    g_cvarEnabled          = register_cvar("mh_enabled", "0");
+    g_cvarTraceBudget      = register_cvar("mh_trace_budget", "30");
+    g_cvarTint             = register_cvar("mh_tint", "0");
     g_cvarGameMode         = register_cvar("mh_gamemode", "0"); // 0=Survivors vs Monster, 1=Both Teams vs Monster
     g_cvarDifficulty       = register_cvar("mh_difficulty", "1"); // 0=Easy, 1=Normal, 2=Nightmare, 3=Custom
     g_cvarHealth           = register_cvar("mh_monster_health", "6000.0");
@@ -518,6 +562,8 @@ public plugin_init() {
 
     // Commands & Menus
     register_clcmd("say /horror", "cmd_menu");
+    register_clcmd("say /mh_modeltest", "cmd_modeltest");
+    register_clcmd("mh_modeltest", "cmd_modeltest");
     register_clcmd("say_team /horror", "cmd_menu");
     register_clcmd("mh_menu", "cmd_menu");
     register_concmd("mh_spawn", "cmd_spawn_console", ADMIN_BAN, "Spawn the zombie in front of the caller");
@@ -554,6 +600,23 @@ public plugin_init() {
     get_configsdir(config_path, charsmax(config_path));
     server_cmd("exec %s/monster_hunt.cfg", config_path);
     set_task(2.0, "task_build_waypoints");
+}
+
+public plugin_cfg() {
+    set_pcvar_num(g_cvarEnabled, 0);
+    g_modePendingChange = false;
+    restore_team_rules_mode_off();
+}
+
+public plugin_end() {
+    stop_all_monster_sounds();
+    remove_monster_entity();
+}
+
+public client_disconnected(id) {
+    g_playerRoundDamage[id] = 0.0;
+    emit_sound(id, CHAN_STATIC, SOUND_HEARTBEAT, 0.0, 0.0, SND_STOP, PITCH_NORM);
+    client_cmd(id, "stopsound");
 }
 
 // =========================================================================
@@ -745,8 +808,18 @@ public event_new_round() {
 public task_build_waypoints() { build_waypoint_graph(); }
 
 public event_round_start() {
+    if (g_modePendingChange) {
+        g_modePendingChange = false;
+        set_pcvar_num(g_cvarEnabled, 1);
+        apply_team_rules_mode_on();
+        client_print_color(0, print_team_red, "^4[Horror] ^1Monster Hunt mode is now ^3ACTIVE^1 for this round!");
+    }
+
     if (g_totalWaypoints == 0) build_waypoint_graph();
-    if (!get_pcvar_num(g_cvarEnabled)) return;
+    if (!get_pcvar_num(g_cvarEnabled)) {
+        restore_team_rules_mode_off();
+        return;
+    }
     if (g_monsterEnt > 0 && is_valid_ent(g_monsterEnt)) return;
     if (task_exists(TASK_COUNTDOWN)) return;
 
@@ -760,6 +833,8 @@ public logevent_round_start() {
 }
 
 public logevent_round_end() {
+    stop_all_monster_sounds();
+    remove_task(TASK_MONSTER_MOVE);
     remove_task(TASK_COUNTDOWN);
     remove_task(TASK_AI_TICK);
     remove_task(TASK_HEALTHBAR);
@@ -1287,13 +1362,23 @@ stock create_monster_entity(const Float:pos[3]) {
     entity_set_float(ent, EV_FL_health, hp);
     entity_set_float(ent, EV_FL_max_health, hp);
 
-    // Render & Animation
+    // Clean Default Render Settings: normal render mode, no white diffuse modulation, scale 1.0
     entity_set_int(ent, EV_INT_rendermode, kRenderNormal);
-    entity_set_float(ent, EV_FL_renderamt, 255.0);
-    entity_set_vector(ent, EV_VEC_rendercolor, Float:{255.0, 255.0, 255.0});
+    entity_set_int(ent, EV_INT_renderfx, kRenderFxNone);
+    entity_set_float(ent, EV_FL_renderamt, 0.0);
+    entity_set_vector(ent, EV_VEC_rendercolor, Float:{0.0, 0.0, 0.0});
+
+    if (get_pcvar_num(g_cvarTint) == 1) {
+        entity_set_int(ent, EV_INT_renderfx, kRenderFxGlowShell);
+        entity_set_vector(ent, EV_VEC_rendercolor, Float:{40.0, 10.0, 10.0});
+        entity_set_float(ent, EV_FL_renderamt, 15.0);
+    }
+
     entity_set_int(ent, EV_INT_skin, 0);
     entity_set_int(ent, EV_INT_body, 0);
+    entity_set_float(ent, EV_FL_scale, 1.0);
     entity_set_int(ent, EV_INT_sequence, 0); // idle1
+    entity_set_float(ent, EV_FL_frame, 0.0);
     entity_set_float(ent, EV_FL_framerate, 1.0);
     entity_set_float(ent, EV_FL_animtime, get_gametime());
 
@@ -1313,9 +1398,13 @@ stock create_monster_entity(const Float:pos[3]) {
 
     client_print_color(0, print_team_red, "^4[Horror] ^3THE ZOMBIE HAS AWAKENED! ^1Difficulty: ^4%s ^1| Health: ^3%.0f HP", diff_str, hp);
 
-    // AI & Loop Tasks
+    // Fast Loop: 25Hz smooth yaw interpolation + movement stepping
+    remove_task(TASK_MONSTER_MOVE);
+    set_task(0.04, "task_monster_move", TASK_MONSTER_MOVE, _, _, "b");
+
+    // Slow Loop: 4Hz target decisions, abilities, path search
     remove_task(TASK_AI_TICK);
-    set_task(0.10, "monster_ai_tick", TASK_AI_TICK, _, _, "b");
+    set_task(0.25, "monster_ai_tick", TASK_AI_TICK, _, _, "b");
 
     remove_task(TASK_HEALTHBAR);
     set_task(0.25, "task_update_healthbar", TASK_HEALTHBAR, _, _, "b");
@@ -1342,6 +1431,8 @@ stock create_monster_entity(const Float:pos[3]) {
 }
 
 stock remove_monster_entity() {
+    stop_all_monster_sounds();
+    remove_task(TASK_MONSTER_MOVE);
     if (g_monsterEnt > 0 && is_valid_ent(g_monsterEnt)) {
         remove_entity(g_monsterEnt);
         g_monsterEnt = 0;
@@ -1351,6 +1442,31 @@ stock remove_monster_entity() {
 // =========================================================================
 // MONSTER 100ms AI THINK LOOP & ATTACK DISPATCHER (Steps 3 & 4)
 // =========================================================================
+
+public task_monster_move() {
+    new ent = g_monsterEnt;
+    if (!is_valid_ent(ent) || !get_pcvar_num(g_cvarEnabled)) return;
+    if (g_monsterState == STATE_NONE || g_monsterState == STATE_DEAD) return;
+
+    new Float:now = get_gametime();
+    if (now - g_lastTraceResetTime >= 1.0) {
+        g_debugTracesLastSec = g_debugTracesThisSec;
+        g_debugTracesThisSec = 0;
+        g_lastTraceResetTime = now;
+    }
+
+    if (get_pcvar_num(g_cvarDebug) && is_user_connected(1)) {
+        set_hudmessage(0, 220, 255, 0.02, 0.22, 0, 0.0, 0.2, 0.0, 0.0, 3);
+        show_hudmessage(1, "[MH Debug] State: %d | Target: %d | Traces/s: %d | Speed: %.1f",
+            g_monsterState, g_currentTarget, g_debugTracesLastSec, g_monsterMoveSpeed);
+    }
+
+    if (g_monsterMoveSpeed > 0.0 && (g_monsterState == STATE_PATROL || g_monsterState == STATE_CHASE || g_monsterState == STATE_INVESTIGATE)) {
+        new Float:m_origin[3];
+        entity_get_vector(ent, EV_VEC_origin, m_origin);
+        face_and_move_direct(ent, m_origin, g_monsterGoalPos, g_monsterMoveSpeed, 0.04);
+    }
+}
 
 public monster_ai_tick() {
     if (!is_valid_ent(g_monsterEnt) || g_monsterState == STATE_NONE || g_monsterState == STATE_DEAD) {
@@ -1859,7 +1975,9 @@ stock navigate_monster_towards(ent, const Float:m_origin[3], const Float:t_origi
 
     // Check direct Line of Sight
     if (check_line_of_sight(target, t_origin, ent, m_origin)) {
-        face_and_move_direct(ent, m_origin, t_origin, move_speed);
+        g_monsterGoalPos = t_origin;
+        g_monsterMoveSpeed = move_speed;
+        face_and_move_direct(ent, m_origin, t_origin, move_speed, 0.25);
         g_pathLength = 0;
         return;
     }
@@ -1902,8 +2020,17 @@ stock navigate_monster_towards(ent, const Float:m_origin[3], const Float:t_origi
                 node_origin = g_wpOrigin[g_currentPath[g_pathIndex]];
                 node_origin[2] = m_origin[2];
             }
+        } else if (g_pathIndex + 1 < g_pathLength) {
+            new skip_node = g_currentPath[g_pathIndex + 1];
+            if (check_line_of_sight(0, g_wpOrigin[skip_node], ent, m_origin)) {
+                g_pathIndex++;
+                node_origin = g_wpOrigin[skip_node];
+                node_origin[2] = m_origin[2];
+            }
         }
-        face_and_move_direct(ent, m_origin, node_origin, move_speed);
+        g_monsterGoalPos = node_origin;
+        g_monsterMoveSpeed = move_speed;
+        face_and_move_direct(ent, m_origin, node_origin, move_speed, 0.25);
     } else {
         face_and_move_direct(ent, m_origin, t_origin, move_speed);
     }
@@ -1958,23 +2085,33 @@ stock execute_patrol_behavior(ent, const Float:m_origin[3]) {
                 node_origin[2] = m_origin[2];
             }
         }
-        face_and_move_direct(ent, m_origin, node_origin, walk_speed);
+        g_monsterGoalPos = node_origin;
+        g_monsterMoveSpeed = walk_speed;
+        face_and_move_direct(ent, m_origin, node_origin, walk_speed, 0.25);
     }
 }
 
-stock face_and_move_direct(ent, const Float:from[3], const Float:to[3], Float:speed) {
+stock face_and_move_direct(ent, const Float:from[3], const Float:to[3], Float:speed, Float:dt = 0.10) {
     new Float:diff[3];
     diff[0] = to[0] - from[0];
     diff[1] = to[1] - from[1];
     diff[2] = 0.0;
 
-    new Float:yaw_angle[3];
-    vector_to_angle(diff, yaw_angle);
-    yaw_angle[0] = 0.0;
-    entity_set_vector(ent, EV_VEC_angles, yaw_angle);
+    new Float:target_yaw[3];
+    vector_to_angle(diff, target_yaw);
+    target_yaw[0] = 0.0;
 
-    new Float:step_dist = speed * 0.10;
-    new walk_success = engfunc(EngFunc_WalkMove, ent, yaw_angle[1], step_dist, WALKMOVE_NORMAL);
+    new Float:cur_angles[3];
+    entity_get_vector(ent, EV_VEC_angles, cur_angles);
+    cur_angles[1] = approach_angle(target_yaw[1], cur_angles[1], 240.0 * dt);
+    cur_angles[0] = 0.0;
+    cur_angles[2] = 0.0;
+    entity_set_vector(ent, EV_VEC_angles, cur_angles);
+
+    new Float:step_dist = speed * dt;
+    if (step_dist > 25.0) step_dist = 25.0;
+
+    new walk_success = engfunc(EngFunc_WalkMove, ent, cur_angles[1], step_dist, WALKMOVE_NORMAL);
     if (!walk_success) {
         engfunc(EngFunc_MoveToOrigin, ent, to, step_dist, MOVE_NORMAL);
     }
@@ -2023,6 +2160,11 @@ public task_monster_sense_tick() {
 }
 
 stock bool:check_line_of_sight(target, const Float:t_pos[3], ent, const Float:m_pos[3]) {
+    g_debugTracesThisSec++;
+    new budget = get_pcvar_num(g_cvarTraceBudget);
+    if (budget > 0 && g_debugTracesThisSec > budget) {
+        return false;
+    }
     new Float:start[3], Float:end[3];
     start = m_pos; start[2] += 50.0;
     end   = t_pos; end[2]   += 20.0;
@@ -2221,6 +2363,8 @@ public fw_monster_killed(victim, attacker, should_gib) {
     entity_set_int(victim, EV_INT_movetype, MOVETYPE_NONE);
     set_monster_sequence(victim, 17); // diesimple
 
+    stop_all_monster_sounds();
+    remove_task(TASK_MONSTER_MOVE);
     remove_task(TASK_AI_TICK);
     remove_task(TASK_HEALTHBAR);
     remove_task(TASK_BOT_REACT);
@@ -2407,7 +2551,7 @@ stock compute_aim_angles(const Float:bot_eyes[3], const Float:target_pos[3], Flo
 }
 
 public fw_cmd_start(id, uc_handle, random_seed) {
-    if (!is_valid_ent(g_monsterEnt) || g_monsterState == STATE_NONE || g_monsterState == STATE_DEAD) return FMRES_IGNORED;
+    if (!get_pcvar_num(g_cvarEnabled) || !is_valid_ent(g_monsterEnt) || g_monsterState == STATE_NONE || g_monsterState == STATE_DEAD) return FMRES_IGNORED;
     if (!is_user_alive(id) || !is_user_bot(id) || id == g_dummyTBot) return FMRES_IGNORED;
     if (!get_pcvar_num(g_cvarBotReact) || !get_pcvar_num(g_cvarBotAI)) return FMRES_IGNORED;
 
@@ -2783,14 +2927,16 @@ public cmd_menu(id) {
     new menu = menu_create("\r[Horror] \yMonster Hunt Control Panel", "menu_main_handler");
 
     new is_on = get_pcvar_num(g_cvarEnabled);
-    new gmode = get_pcvar_num(g_cvarGameMode);
-    new item1[64], item2[64], item3[64];
+    new item_mode[96], item_diff[64], item_atmo[64], item_bots[64];
 
-    formatex(item1, charsmax(item1), "\wMonster Hunt: %s", is_on ? "\y[ACTIVE]" : "\d[OFF (Regular Match)]");
-    menu_additem(menu, item1, "1");
-
-    formatex(item2, charsmax(item2), "\wTeam Setup: \y[%s]", (gmode == 0) ? "Survivors Only (Co-op)" : "Both Teams vs Monster");
-    menu_additem(menu, item2, "2");
+    if (g_modePendingChange) {
+        formatex(item_mode, charsmax(item_mode), "\wMode: \y[Monster Hunt (Pending Next Round)]");
+    } else if (is_on) {
+        formatex(item_mode, charsmax(item_mode), "\wMode: \y[Monster Hunt (ACTIVE)]");
+    } else {
+        formatex(item_mode, charsmax(item_mode), "\wMode: \d[Regular Match (Standard CS)]");
+    }
+    menu_additem(menu, item_mode, "1");
 
     new diff = get_pcvar_num(g_cvarDifficulty);
     new diff_str[32];
@@ -2798,17 +2944,22 @@ public cmd_menu(id) {
     else if (diff == 1) copy(diff_str, charsmax(diff_str), "Normal");
     else if (diff == 2) copy(diff_str, charsmax(diff_str), "Nightmare");
     else copy(diff_str, charsmax(diff_str), "Custom");
+    formatex(item_diff, charsmax(item_diff), "\wDifficulty: \y[%s]", diff_str);
+    menu_additem(menu, item_diff, "2");
 
-    formatex(item3, charsmax(item3), "\wDifficulty Preset: \y[%s]", diff_str);
-    menu_additem(menu, item3, "3");
+    new atmo = get_pcvar_num(g_cvarAtmosphere);
+    new atmo_str[32];
+    if (atmo == 2) copy(atmo_str, charsmax(atmo_str), "Heavy (Midnight)");
+    else if (atmo == 1) copy(atmo_str, charsmax(atmo_str), "Light (Dusk)");
+    else copy(atmo_str, charsmax(atmo_str), "Off (Daylight Normal)");
+    formatex(item_atmo, charsmax(item_atmo), "\wAtmosphere: \y[%s]", atmo_str);
+    menu_additem(menu, item_atmo, "3");
 
-    menu_additem(menu, "\wCustom Monster Attributes \r>", "4");
-    menu_additem(menu, "\wAdaptive Tracking & Senses \r>", "5");
-    menu_additem(menu, "\wKill Abilities & Attacks \r>", "6");
-    menu_additem(menu, "\wTeammate Bot AI Settings \r>", "7");
-    menu_additem(menu, "\wAtmosphere & Immersion \r>", "8");
-    menu_additem(menu, "\rSpawn Zombie In Front Of Me", "9");
-    menu_additem(menu, "\rKill Active Zombie Now", "10");
+    new bots_ai = get_pcvar_num(g_cvarBotAI);
+    formatex(item_bots, charsmax(item_bots), "\wBots: Fight & Flee: \y[%s]", bots_ai ? "ON" : "OFF");
+    menu_additem(menu, item_bots, "4");
+
+    menu_additem(menu, "\wAdvanced Settings (Admins Only) \r>", "5");
 
     menu_setprop(menu, MPROP_EXIT, MEXIT_ALL);
     menu_display(id, menu, 0);
@@ -2823,74 +2974,170 @@ public menu_main_handler(id, menu, item) {
 
     new bool:is_admin = bool:(get_user_flags(id) & ADMIN_CFG);
 
-    switch (item) {
-        case 0: {
-            if (!is_admin) {
-                client_print_color(id, print_team_red, "^4[Horror] ^1Only administrators (^3ADMIN_CFG^1) can change game mode.");
-            } else {
-                new next_val = get_pcvar_num(g_cvarEnabled) ? 0 : 1;
-                set_pcvar_num(g_cvarEnabled, next_val);
-                if (!next_val) {
-                    remove_monster_entity();
-                    remove_task(TASK_COUNTDOWN);
-                    remove_task(TASK_AI_TICK);
-                    remove_task(TASK_HEALTHBAR);
-                    remove_task(TASK_BOT_REACT);
-                    remove_task(TASK_DANGER_HUD);
-                    restore_team_rules_mode_off();
-                    g_monsterState = STATE_NONE;
-                    engfunc(EngFunc_LightStyle, 0, "m");
-                    client_print_color(0, print_team_default, "^4[Horror] ^1Monster Hunt: ^3OFF (Regular Match Restored)");
-                } else {
-                    apply_team_rules_mode_on();
-                    client_print_color(0, print_team_default, "^4[Horror] ^1Monster Hunt: ^3ON! (Awakens next round)");
-                }
-                save_settings_to_cfg();
-            }
-        }
-        case 1: {
-            if (!is_admin) {
-                client_print_color(id, print_team_red, "^4[Horror] ^1Only administrators (^3ADMIN_CFG^1) can change team setup.");
-            } else {
-                new next_m = get_pcvar_num(g_cvarGameMode) ? 0 : 1;
-                set_pcvar_num(g_cvarGameMode, next_m);
-                if (get_pcvar_num(g_cvarEnabled)) {
-                    apply_team_rules_mode_on();
-                }
-                client_print_color(0, print_team_default, "^4[Horror] ^1Team Setup set to: ^3%s^1!",
-                    (next_m == 0) ? "Survivors Only (Co-op)" : "Both Teams vs Monster");
-                save_settings_to_cfg();
-            }
-        }
-        case 2: {
-            if (!is_admin) {
-                client_print_color(id, print_team_red, "^4[Horror] ^1Only administrators (^3ADMIN_CFG^1) can cycle difficulty.");
-            } else {
-                new next_diff = (get_pcvar_num(g_cvarDifficulty) + 1) % 4;
-                set_pcvar_num(g_cvarDifficulty, next_diff);
-                apply_difficulty_settings();
-                save_settings_to_cfg();
-                client_print_color(0, print_team_default, "^4[Horror] ^1Difficulty set to: ^3%s",
-                    next_diff == 0 ? "Easy" : next_diff == 1 ? "Normal" : next_diff == 2 ? "Nightmare" : "Custom");
-            }
-        }
-        case 3: { menu_destroy(menu); menu_sub_monster(id); return PLUGIN_HANDLED; }
-        case 4: { menu_destroy(menu); menu_sub_tracking(id); return PLUGIN_HANDLED; }
-        case 5: { menu_destroy(menu); menu_sub_attacks(id); return PLUGIN_HANDLED; }
-        case 6: { menu_destroy(menu); menu_sub_bots(id); return PLUGIN_HANDLED; }
-        case 7: { menu_destroy(menu); menu_sub_atmosphere(id); return PLUGIN_HANDLED; }
-        case 8: {
-            if (is_admin) cmd_spawn_console(id, 0);
-            else client_print_color(id, print_team_red, "^4[Horror] ^1Admin required to spawn monster.");
-        }
-        case 9: {
-            if (is_admin) cmd_kill_monster(id, 0);
-            else client_print_color(id, print_team_red, "^4[Horror] ^1Admin required to kill monster.");
-        }
+    if (item != 4 && !is_admin) {
+        client_print_color(id, print_team_red, "^4[Horror] ^1You must be a server admin (^3ADMIN_CFG^1) to change game settings.");
+        menu_destroy(menu);
+        cmd_menu(id);
+        return PLUGIN_HANDLED;
     }
 
+    switch (item) {
+        case 0: { // 1. Mode: Regular / Monster Hunt
+            if (g_modePendingChange) {
+                g_modePendingChange = false;
+                client_print_color(0, print_team_blue, "^4[Horror] ^1Queued Monster Hunt startup was cancelled. Regular match continues.");
+            } else if (get_pcvar_num(g_cvarEnabled)) {
+                set_pcvar_num(g_cvarEnabled, 0);
+                restore_team_rules_mode_off();
+                remove_monster_entity();
+                stop_all_monster_sounds();
+                engfunc(EngFunc_LightStyle, 0, "m");
+                client_print_color(0, print_team_blue, "^4[Horror] ^1Monster Hunt disabled. Regular Match restored.");
+            } else {
+                g_modePendingChange = true;
+                client_print_color(0, print_team_red, "^4[Horror] ^1Monster Hunt selected by Admin! Takes effect at ^3NEXT ROUND START^1.");
+            }
+            menu_destroy(menu);
+            cmd_menu(id);
+            return PLUGIN_HANDLED;
+        }
+        case 1: { // 2. Difficulty
+            new diff = (get_pcvar_num(g_cvarDifficulty) + 1) % 4;
+            set_pcvar_num(g_cvarDifficulty, diff);
+            apply_difficulty_settings();
+            save_settings_to_cfg();
+            menu_destroy(menu);
+            cmd_menu(id);
+            return PLUGIN_HANDLED;
+        }
+        case 2: { // 3. Atmosphere
+            new atmo = (get_pcvar_num(g_cvarAtmosphere) + 1) % 3;
+            set_pcvar_num(g_cvarAtmosphere, atmo);
+            if (get_pcvar_num(g_cvarEnabled)) {
+                if (atmo == 2) engfunc(EngFunc_LightStyle, 0, "b");
+                else if (atmo == 1) engfunc(EngFunc_LightStyle, 0, "f");
+                else engfunc(EngFunc_LightStyle, 0, "m");
+            }
+            save_settings_to_cfg();
+            menu_destroy(menu);
+            cmd_menu(id);
+            return PLUGIN_HANDLED;
+        }
+        case 3: { // 4. Bots Fight & Flee
+            new bots = get_pcvar_num(g_cvarBotAI) ? 0 : 1;
+            set_pcvar_num(g_cvarBotAI, bots);
+            set_pcvar_num(g_cvarBotReact, bots);
+            save_settings_to_cfg();
+            menu_destroy(menu);
+            cmd_menu(id);
+            return PLUGIN_HANDLED;
+        }
+        case 4: { // 5. Advanced Settings
+            menu_destroy(menu);
+            if (!is_admin) {
+                client_print_color(id, print_team_red, "^4[Horror] ^1Advanced settings are restricted to server administrators (^3ADMIN_CFG^1).");
+                return PLUGIN_HANDLED;
+            }
+            menu_advanced(id);
+            return PLUGIN_HANDLED;
+        }
+    }
     menu_destroy(menu);
-    cmd_menu(id);
+    return PLUGIN_HANDLED;
+}
+
+public menu_advanced(id) {
+    new menu = menu_create("\r[Horror] \yAdvanced Configuration (Admins)", "menu_advanced_handler");
+
+    menu_additem(menu, "\wCustom Monster Attributes \r>", "1");
+    menu_additem(menu, "\wAdaptive Tracking & Senses \r>", "2");
+    menu_additem(menu, "\wKill Abilities & Attacks \r>", "3");
+    menu_additem(menu, "\wUI, Comfort & Atmosphere \r>", "4");
+    menu_additem(menu, "\wTelemetry & Performance (mh_debug) \r>", "5");
+    menu_additem(menu, "\rSpawn Zombie In Front Of Me", "6");
+    menu_additem(menu, "\rKill Active Zombie Now", "7");
+
+    menu_setprop(menu, MPROP_EXIT, MEXIT_ALL);
+    menu_display(id, menu, 0);
+    return PLUGIN_HANDLED;
+}
+
+public menu_advanced_handler(id, menu, item) {
+    if (item == MENU_EXIT) {
+        menu_destroy(menu);
+        cmd_menu(id);
+        return PLUGIN_HANDLED;
+    }
+
+    switch (item) {
+        case 0: { menu_destroy(menu); menu_sub_monster(id); return PLUGIN_HANDLED; }
+        case 1: { menu_destroy(menu); menu_sub_tracking(id); return PLUGIN_HANDLED; }
+        case 2: { menu_destroy(menu); menu_sub_attacks(id); return PLUGIN_HANDLED; }
+        case 3: { menu_destroy(menu); menu_sub_atmosphere(id); return PLUGIN_HANDLED; }
+        case 4: {
+            new dbg = get_pcvar_num(g_cvarDebug) ? 0 : 1;
+            set_pcvar_num(g_cvarDebug, dbg);
+            client_print_color(id, print_team_default, "^4[Horror] ^1Debug telemetry toggled: ^3%s", dbg ? "ENABLED" : "DISABLED");
+            menu_destroy(menu);
+            menu_advanced(id);
+            return PLUGIN_HANDLED;
+        }
+        case 5: {
+            menu_destroy(menu);
+            cmd_spawn_console(id, ADMIN_CFG);
+            return PLUGIN_HANDLED;
+        }
+        case 6: {
+            menu_destroy(menu);
+            cmd_kill_monster(id, ADMIN_CFG);
+            return PLUGIN_HANDLED;
+        }
+    }
+    menu_destroy(menu);
+    return PLUGIN_HANDLED;
+}
+
+public cmd_modeltest(id) {
+    if (!is_user_alive(id)) {
+        client_print(id, print_chat, "[Monster Hunt] You must be alive to run the model test.");
+        return PLUGIN_HANDLED;
+    }
+
+    new ent = create_entity("info_target");
+    if (!is_valid_ent(ent)) return PLUGIN_HANDLED;
+
+    entity_set_string(ent, EV_SZ_classname, "monster_model_test");
+    entity_set_model(ent, MODEL_ZOMBIE);
+
+    new Float:mins[3] = {-16.0, -16.0, 0.0};
+    new Float:maxs[3] = {16.0, 16.0, 72.0};
+    entity_set_size(ent, mins, maxs);
+
+    entity_set_int(ent, EV_INT_solid, SOLID_SLIDEBOX);
+    entity_set_int(ent, EV_INT_movetype, MOVETYPE_STEP);
+
+    // Clean Default Render Settings (No white tint, no glow shell, scale 1.0)
+    entity_set_int(ent, EV_INT_rendermode, kRenderNormal);
+    entity_set_int(ent, EV_INT_renderfx, kRenderFxNone);
+    entity_set_float(ent, EV_FL_renderamt, 0.0);
+    entity_set_vector(ent, EV_VEC_rendercolor, Float:{0.0, 0.0, 0.0});
+    entity_set_int(ent, EV_INT_skin, 0);
+    entity_set_int(ent, EV_INT_body, 0);
+    entity_set_float(ent, EV_FL_scale, 1.0);
+    entity_set_int(ent, EV_INT_sequence, 0); // idle1
+    entity_set_float(ent, EV_FL_frame, 0.0);
+    entity_set_float(ent, EV_FL_framerate, 1.0);
+    entity_set_float(ent, EV_FL_animtime, get_gametime());
+
+    new Float:origin[3], Float:fwd[3];
+    entity_get_vector(id, EV_VEC_origin, origin);
+    velocity_by_aim(id, 85, fwd);
+    origin[0] += fwd[0]; origin[1] += fwd[1];
+    entity_set_origin(ent, origin);
+    engfunc(EngFunc_DropToFloor, ent);
+
+    client_print_color(id, print_team_default, "^4[Monster Hunt] ^1Spawned ^3models/zombie.mdl^1 next to you with clean, default render settings!");
+    client_print(id, print_console, "[Monster Hunt] Model Test spawned at (%.1f, %.1f, %.1f). Check textures and lighting.", origin[0], origin[1], origin[2]);
     return PLUGIN_HANDLED;
 }
 
@@ -3132,46 +3379,46 @@ stock save_settings_to_cfg() {
     new fp = fopen(config_path, "w");
     if (!fp) return;
 
-    fprintf(fp, "// ==============================================================================\n");
-    fprintf(fp, "// HORROR MONSTER HUNT - DYNAMIC CONFIGURATION (AUTO-SAVED)\n");
-    fprintf(fp, "// ==============================================================================\n\n");
+    fprintf(fp, "// ==============================================================================^n");
+    fprintf(fp, "// HORROR MONSTER HUNT - DYNAMIC CONFIGURATION (AUTO-SAVED)^n");
+    fprintf(fp, "// ==============================================================================^n^n");
 
-    fprintf(fp, "mh_enabled %d\n", get_pcvar_num(g_cvarEnabled));
-    fprintf(fp, "mh_gamemode %d\n", get_pcvar_num(g_cvarGameMode));
-    fprintf(fp, "mh_difficulty %d\n", get_pcvar_num(g_cvarDifficulty));
-    fprintf(fp, "mh_monster_health %.0f\n", get_pcvar_float(g_cvarHealth));
-    fprintf(fp, "mh_speed_mult %.2f\n", get_pcvar_float(g_cvarSpeedMult));
-    fprintf(fp, "mh_damage_mult %.2f\n", get_pcvar_float(g_cvarDamageMult));
-    fprintf(fp, "mh_cooldown_mult %.2f\n", get_pcvar_float(g_cvarCooldownMult));
-    fprintf(fp, "mh_dmg_reduction %.2f\n", get_pcvar_float(g_cvarDmgReduction));
-    fprintf(fp, "mh_target_mode %d\n", get_pcvar_num(g_cvarTargetMode));
-    fprintf(fp, "mh_prefer_bots %d\n", get_pcvar_num(g_cvarPreferBots));
-    fprintf(fp, "mh_tracking_mode %d\n", get_pcvar_num(g_cvarTrackingMode));
-    fprintf(fp, "mh_sight_range %.1f\n", get_pcvar_float(g_cvarSightRange));
-    fprintf(fp, "mh_hear_range %.1f\n", get_pcvar_float(g_cvarHearRange));
-    fprintf(fp, "mh_sense %d\n", get_pcvar_num(g_cvarSense));
-    fprintf(fp, "mh_sense_interval %.1f\n", get_pcvar_float(g_cvarSenseInterval));
-    fprintf(fp, "mh_ability_combo %d\n", get_pcvar_num(g_cvarAbilityCombo));
-    fprintf(fp, "mh_ability_lunge %d\n", get_pcvar_num(g_cvarAbilityLunge));
-    fprintf(fp, "mh_ability_stomp %d\n", get_pcvar_num(g_cvarAbilityStomp));
-    fprintf(fp, "mh_ability_ranged %d\n", get_pcvar_num(g_cvarAbilityRanged));
-    fprintf(fp, "mh_jumpscare %d\n", get_pcvar_num(g_cvarJumpscare));
-    fprintf(fp, "mh_flash_safe %d\n", get_pcvar_num(g_cvarFlashSafe));
-    fprintf(fp, "mh_healthbar %d\n", get_pcvar_num(g_cvarHealthBar));
-    fprintf(fp, "mh_danger_hud %d\n", get_pcvar_num(g_cvarDangerHud));
-    fprintf(fp, "mh_round_summary %d\n", get_pcvar_num(g_cvarRoundSummary));
-    fprintf(fp, "mh_bot_react %d\n", get_pcvar_num(g_cvarBotReact));
-    fprintf(fp, "mh_bot_ai %d\n", get_pcvar_num(g_cvarBotAI));
-    fprintf(fp, "mh_bot_callouts %d\n", get_pcvar_num(g_cvarBotCallouts));
-    fprintf(fp, "mh_blood %d\n", get_pcvar_num(g_cvarBlood));
-    fprintf(fp, "mh_blood_amount %d\n", get_pcvar_num(g_cvarBloodAmount));
-    fprintf(fp, "mh_blood_color %d\n", get_pcvar_num(g_cvarBloodColor));
-    fprintf(fp, "mh_atmosphere %d\n", get_pcvar_num(g_cvarAtmosphere));
-    fprintf(fp, "mh_heartbeat %d\n", get_pcvar_num(g_cvarHeartbeat));
-    fprintf(fp, "mh_screenshake %d\n", get_pcvar_num(g_cvarScreenShake));
-    fprintf(fp, "mh_flicker %d\n", get_pcvar_num(g_cvarFlicker));
-    fprintf(fp, "mh_pulse %d\n", get_pcvar_num(g_cvarPulse));
-    fprintf(fp, "mh_debug %d\n", get_pcvar_num(g_cvarDebug));
+    // Always persist mh_enabled 0 so server starts in Regular Match^n    fprintf(fp, "mh_enabled 0^n");
+    fprintf(fp, "mh_gamemode %d^n", get_pcvar_num(g_cvarGameMode));
+    fprintf(fp, "mh_difficulty %d^n", get_pcvar_num(g_cvarDifficulty));
+    fprintf(fp, "mh_monster_health %.0f^n", get_pcvar_float(g_cvarHealth));
+    fprintf(fp, "mh_speed_mult %.2f^n", get_pcvar_float(g_cvarSpeedMult));
+    fprintf(fp, "mh_damage_mult %.2f^n", get_pcvar_float(g_cvarDamageMult));
+    fprintf(fp, "mh_cooldown_mult %.2f^n", get_pcvar_float(g_cvarCooldownMult));
+    fprintf(fp, "mh_dmg_reduction %.2f^n", get_pcvar_float(g_cvarDmgReduction));
+    fprintf(fp, "mh_target_mode %d^n", get_pcvar_num(g_cvarTargetMode));
+    fprintf(fp, "mh_prefer_bots %d^n", get_pcvar_num(g_cvarPreferBots));
+    fprintf(fp, "mh_tracking_mode %d^n", get_pcvar_num(g_cvarTrackingMode));
+    fprintf(fp, "mh_sight_range %.1f^n", get_pcvar_float(g_cvarSightRange));
+    fprintf(fp, "mh_hear_range %.1f^n", get_pcvar_float(g_cvarHearRange));
+    fprintf(fp, "mh_sense %d^n", get_pcvar_num(g_cvarSense));
+    fprintf(fp, "mh_sense_interval %.1f^n", get_pcvar_float(g_cvarSenseInterval));
+    fprintf(fp, "mh_ability_combo %d^n", get_pcvar_num(g_cvarAbilityCombo));
+    fprintf(fp, "mh_ability_lunge %d^n", get_pcvar_num(g_cvarAbilityLunge));
+    fprintf(fp, "mh_ability_stomp %d^n", get_pcvar_num(g_cvarAbilityStomp));
+    fprintf(fp, "mh_ability_ranged %d^n", get_pcvar_num(g_cvarAbilityRanged));
+    fprintf(fp, "mh_jumpscare %d^n", get_pcvar_num(g_cvarJumpscare));
+    fprintf(fp, "mh_flash_safe %d^n", get_pcvar_num(g_cvarFlashSafe));
+    fprintf(fp, "mh_healthbar %d^n", get_pcvar_num(g_cvarHealthBar));
+    fprintf(fp, "mh_danger_hud %d^n", get_pcvar_num(g_cvarDangerHud));
+    fprintf(fp, "mh_round_summary %d^n", get_pcvar_num(g_cvarRoundSummary));
+    fprintf(fp, "mh_bot_react %d^n", get_pcvar_num(g_cvarBotReact));
+    fprintf(fp, "mh_bot_ai %d^n", get_pcvar_num(g_cvarBotAI));
+    fprintf(fp, "mh_bot_callouts %d^n", get_pcvar_num(g_cvarBotCallouts));
+    fprintf(fp, "mh_blood %d^n", get_pcvar_num(g_cvarBlood));
+    fprintf(fp, "mh_blood_amount %d^n", get_pcvar_num(g_cvarBloodAmount));
+    fprintf(fp, "mh_blood_color %d^n", get_pcvar_num(g_cvarBloodColor));
+    fprintf(fp, "mh_atmosphere %d^n", get_pcvar_num(g_cvarAtmosphere));
+    fprintf(fp, "mh_heartbeat %d^n", get_pcvar_num(g_cvarHeartbeat));
+    fprintf(fp, "mh_screenshake %d^n", get_pcvar_num(g_cvarScreenShake));
+    fprintf(fp, "mh_flicker %d^n", get_pcvar_num(g_cvarFlicker));
+    fprintf(fp, "mh_pulse %d^n", get_pcvar_num(g_cvarPulse));
+    fprintf(fp, "mh_debug %d^n", get_pcvar_num(g_cvarDebug));
 
     fclose(fp);
 }
@@ -3205,8 +3452,10 @@ public cmd_kill_monster(id, level) {
 
 stock set_monster_sequence(ent, seq) {
     if (!is_valid_ent(ent)) return;
-    entity_set_int(ent, EV_INT_sequence, seq);
-    entity_set_float(ent, EV_FL_frame, 0.0);
+    if (entity_get_int(ent, EV_INT_sequence) != seq) {
+        entity_set_int(ent, EV_INT_sequence, seq);
+        entity_set_float(ent, EV_FL_frame, 0.0);
+    }
     entity_set_float(ent, EV_FL_framerate, 1.0);
     entity_set_float(ent, EV_FL_animtime, get_gametime());
 }
