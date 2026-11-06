@@ -165,19 +165,34 @@ cd czero\addons\amxmodx\scripting
 
 ---
 
-## 🧟 Monster Hunt Horror Gamemode (Experimental Branch)
+## 🧟 Monster Hunt Horror Gamemode
 
-This branch contains the **Monster Hunt Horror Mode** (`monster_hunt.amxx`), featuring an intelligent Half-Life Zombie boss, adaptive A* tracking, difficulty presets, signature abilities, horror atmosphere, and cooperative bot teammate AI.
+In addition to standard Counter-Strike matches with AI teammates, this repository includes the **Horror "Monster Hunt" Mode** (`monster_hunt.amxx`), transforming Condition Zero into an asymmetrical survival horror cooperative experience.
 
-See [`MONSTER_HUNT_README.md`](MONSTER_HUNT_README.md) for full documentation, cvars, and known limitations.
+A terrifying Half-Life Zombie boss awakens with intelligent adaptive tracking, dynamic combat difficulty presets, lethal signature abilities, and a multi-layered horror UI. Teammate bots dynamically cooperate, kite backwards, focus fire, and announce sightings over radio, while survivors struggle to survive the night.
 
-### Current Limitations & Known Issues:
-- **Optimization**: The AI state machine, dynamic A* pathfinding, and multi-bot tracing run in Pawn; performance is unoptimized on lower-end systems.
-- **Monster Skin / Textures**: In certain GoldSrc renderers or client setups, the monster model's textures may fail to load properly, appearing as a plain white and grey monster.
-- **Persistent Ambience**: Horror background audio and heartbeat soundscapes may continue playing without cleanly terminating after the round ends.
-- **Auto-Start On Match Launch**: The match directly starts with the monster mod turned on by default.
-- **Menu Clutter**: The `/horror` in-game control menu contains numerous tuning options and sub-menus.
-- **Movement Stutter**: The monster moves via server-side waypoint vectors (`MOVETYPE_STEP`), which can appear laggy or stuttery in-game.
+See [`MONSTER_HUNT_README.md`](MONSTER_HUNT_README.md) for complete technical documentation, console variables, and architecture details.
+
+### 🎮 How to Play
+- **Default Mode**: The server boots cleanly into **Regular Match** mode (`mh_enabled 0`) with 100% standard Counter-Strike rules, daylight lighting, and standard economy.
+- **Activating Monster Hunt**: Admins (`ADMIN_CFG`) can type `/horror` in chat or `mh_menu` in console to open the control panel and select **Monster Hunt**. The mode activates smoothly at the start of the next round.
+- **Quick In-Game Commands**:
+  | Command | Access | Description |
+  | :--- | :--- | :--- |
+  | `/horror` or `mh_menu` | All (Admin to edit) | Opens the streamlined 5-item control panel. |
+  | `/mh_modeltest` | All | Spawns an inert zombie 85u ahead to test textures and lighting. |
+  | `mh_spawn` | Admin (`ADMIN_CFG`) | Manually spawns the monster in front of the caller. |
+  | `mh_kill` | Admin (`ADMIN_CFG`) | Instantly slays the active monster. |
+
+### ⚡ Key Features & Upgrades
+- **Decoupled 25Hz Physics Stepping**: Fast 25Hz movement stepping (`TASK_MONSTER_MOVE` at 0.04s) decoupled from the 4Hz AI decision loop (`TASK_AI_TICK` at 0.25s) with smooth yaw interpolation (`approach_angle` at 240 deg/s) and corner-cutting path smoothing — eliminating stutter and jitter.
+- **Authentic Valve Textures Restored**: Automatically loads and precaches Valve's companion texture submodel (`czero/models/zombiet.mdl`, 19 raw textures) and uses neutral render settings (`kRenderNormal`), eliminating the untextured white/grey look.
+- **Audio Lifecycle Flush**: Stops proximity heartbeats, roars, and ambient loops cleanly on round end, monster death, mode change, or player disconnect (`stop_all_monster_sounds()`).
+- **Engine Optimization & Trace Budget**: Includes `mh_trace_budget` (default 30/s) and zero-cost early returns in `FM_CmdStart` and `FM_PlaybackEvent` when the mode is off.
+- **Streamlined 5-Item Control Menu**: Simplified main menu (Mode, Difficulty, Atmosphere, Teammate Bots, Advanced Settings >) with password/flag protection for server administrators.
+- **Difficulty Presets**: Easy (3,000 HP), Normal (6,000 HP), Nightmare (12,000 HP with 1% regen), and fully customizable attributes.
+- **Lethal Abilities**: 3-hit combo melee with knockback, Apex Lunge leaps, Ground Stomp shockwaves, Ballistic Acid Spit, and Jumpscares (with photosensitivity flash-safe toggle).
+- **Adaptive Tracking**: Heat maps, camping spot memory, route prediction for fleeing survivors, and flank routing against clustered squads.
 
 ---
 

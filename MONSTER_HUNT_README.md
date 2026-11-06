@@ -166,18 +166,23 @@ Printed to chat and displayed on a centered HUD banner at round end (`mh_round_s
 - Top damage dealer with total damage dealt.
 
 ### 4. Interactive In-Game Menu (`/horror` or `mh_menu`)
-Accessible via chat `/horror` or console `mh_menu`:
-- **Main Menu**:
-  1. Game Mode: [Monster Hunt / Regular Match]
-  2. Difficulty: [Easy / Normal / Nightmare / Custom]
-  3. Custom Monster Attributes $\rightarrow$ Sub-Menu
-  4. Adaptive Tracking & Senses $\rightarrow$ Sub-Menu
-  5. Kill Abilities & Attacks $\rightarrow$ Sub-Menu
-  6. Teammate Bot AI Settings $\rightarrow$ Sub-Menu
-  7. Atmosphere & Immersion $\rightarrow$ Sub-Menu
-  8. Spawn Monster / Kill Monster
-- **Admin Security**: Only administrators with `ADMIN_CFG` (flag 'c') can change settings. Non-admin players can open the menu in view-only mode.
-- **Persistence**: Any change made in the menu is automatically written to `czero\addons\amxmodx\configs\monster_hunt.cfg` so settings persist across map changes.
+Accessible via chat `/horror`, `say_team /horror`, or console `mh_menu`:
+- **Main Menu (Streamlined 5-Item Control Panel)**:
+  1. `Mode`: Toggle between `[Regular Match (Standard CS)]` and `[Monster Hunt (ACTIVE / Pending Next Round)]`
+  2. `Difficulty`: Cycle presets between `[Easy]`, `[Normal]`, `[Nightmare]`, `[Custom]`
+  3. `Atmosphere`: Cycle lighting between `[Off (Daylight Normal)]`, `[Light (Dusk)]`, `[Heavy (Midnight)]`
+  4. `Bots: Fight & Flee`: Toggle teammate bot combat and kiting AI `[ON / OFF]`
+  5. `Advanced Settings (Admins Only) >`: Opens the nested administrator configuration menu
+- **Advanced Sub-Menu (`menu_advanced`)**:
+  - `1. Custom Monster Attributes >` (HP, speed, damage, cooldown multipliers, distance damage reduction)
+  - `2. Adaptive Tracking & Senses >` (Dynamic heat map, camping spots, route prediction, sight/hearing ranges)
+  - `3. Kill Abilities & Attacks >` (Combo melee, Apex Lunge, Ground Stomp, Acid Spit, Jumpscare)
+  - `4. UI, Comfort & Atmosphere >` (Boss health bar, Danger meter, Round summary, Flash-safe mode, Blood & Gore)
+  - `5. Telemetry & Performance (mh_debug) >` (Toggle real-time HUD telemetry overlay)
+  - `6. Spawn Zombie In Front Of Me` (Console command: `mh_spawn`)
+  - `7. Kill Active Zombie Now` (Console command: `mh_kill`)
+- **Admin Security**: Only administrators with `ADMIN_CFG` (flag 'c') can alter game-critical settings. Non-admin players can view the settings in read-only mode.
+- **Auto-Persistence**: Any settings changed in the menu are automatically written to `czero\addons\amxmodx\configs\monster_hunt.cfg` using native formatting (`mh_enabled 0` is always preserved so the server boots cleanly into standard CS).
 
 ---
 
@@ -185,7 +190,7 @@ Accessible via chat `/horror` or console `mh_menu`:
 
 | CVar | Default | Description |
 | :--- | :--- | :--- |
-| `mh_enabled` | `1` | `1` = Monster Hunt active, `0` = Regular match (vanilla rules and daylight). |
+| `mh_enabled` | `0` | `1` = Monster Hunt active, `0` = Regular match (vanilla rules and daylight). |
 | `mh_difficulty` | `1` | `0` = Easy, `1` = Normal, `2` = Nightmare, `3` = Custom. |
 | `mh_monster_health` | `6000.0` | Base hit points for the monster (Custom preset). |
 | `mh_speed_mult` | `1.00` | Movement speed multiplier. |
