@@ -1,3 +1,4 @@
+import re
 import time
 import random
 import threading
@@ -6,6 +7,7 @@ from brain.llm_client import LLMClient
 from brain.offline_bank import get_offline_bank
 from brain.logger import get_logger
 from brain.safety_filter import is_safe_line
+from brain.map_callouts import generate_map_idle_batch, maybe_pick_map_event_line
 
 class ChatterEngine:
     """
@@ -32,9 +34,13 @@ class ChatterEngine:
         self.game_connected = False
 
         # Active game context
+        self.human_count = 1
+        self.human_players = []
+        self.budget_low = False
         self.game_context = {
             "map": "de_dust2",
             "round": 1,
+            "human_players": [],
             "alive_teammates": ["Vikram", "Kabir", "Marcus", "Sunny"],
             "last_events": ["Match warmup"]
         }
@@ -118,11 +124,32 @@ class ChatterEngine:
             if chat_style:
                 self.chat_style = chat_style.lower()
 
+    def update_multiplayer_state(self, human_players: list[str], map_name: str = "", budget_low: bool = False):
+        """
+        Update connected human friend list & API budget state so batch sizes and
+        chatter pacing scale smoothly for 10+ player lobbies (Section 19.4 & 19.9).
+        """
+        with self._lock:
+            self.human_players = list(human_players or [])
+            self.human_count = max(1, len(self.human_players))
+            self.budget_low = bool(budget_low)
+            self.game_context["human_players"] = list(self.human_players)
+            if map_name:
+                self.game_context["map"] = map_name
+
+    def get_target_batch_size(self) -> int:
+        """Use larger 15-line batches when 4+ human friends are playing to stretch the shared free API limit."""
+        return 15 if self.human_count >= 4 else 10
+
     def _sample_gap(self) -> float:
-        """Sample idle gap based on chatter_speed setting."""
+        """Sample idle gap based on chatter_speed, human lobby size, and remaining daily API budget."""
         speed = self.chatter_speed.capitalize()
         if self.active_fight.get("active"):
             return random.uniform(3.0, 6.0)
+
+        # Section 19.4 / 19.9: Talk less often when many humans are in chat or when daily free limit is near
+        if self.budget_low or self.human_count >= 6:
+            return random.uniform(22.0, 38.0)
 
         if speed == "Relaxed":
             return random.uniform(25.0, 40.0)
@@ -202,18 +229,35 @@ class ChatterEngine:
 
     def interrupt_with_event(self, bot_id: str, event_type: str, details: dict = None):
         """
-        Real game events (kill, death, bomb, round end) cut the idle script,
+        Real game events (kill, death, human play/roast, bomb, round end) cut the idle script,
         and make the right bot react within 1 to 2 seconds!
         """
         if not self.game_connected:
             return
 
         clean_mode = (self.chat_style == "clean")
-        text, tag, mood = self.offline_bank.get_event_reaction(event_type, bot_id, clean_mode=clean_mode)
+        details = details or {}
+        bank_event = "roast_player" if details.get("roast_friend") else event_type
+        map_override = None
+        if not details.get("roast_friend"):
+            map_override = maybe_pick_map_event_line(self.game_context.get("map", ""), event_type)
+        if map_override:
+            text, tag = map_override
+            mood = "hyped" if event_type in ("kill", "bomb_defused", "round_win") else "urgent"
+        else:
+            text, tag, mood = self.offline_bank.get_event_reaction(bank_event, bot_id, clean_mode=clean_mode)
+
+        # Personalize with the real friend's name in multiplayer when hyping a kill or roasting a death (MP07)
+        friend_name = details.get("friend_name", "").strip()
+        if friend_name and friend_name.lower() not in ("player", "world"):
+            text = re.sub(r"\bplayer\b", friend_name, text, flags=re.IGNORECASE)
+            if friend_name.lower() not in text.lower() and len(friend_name) + len(text) < 140:
+                text = f"{friend_name}! {text}" if event_type == "kill" else f"{friend_name}, {text[0].lower() + text[1:] if len(text) > 1 and not text[:2].isupper() else text}"
+
         if not tag:
             default_event_tags = {
-                "death": "fail_sad",
-                "kill": "headshot" if (details and details.get("headshot")) else "hype",
+                "death": "roast" if details.get("roast_friend") else "fail_sad",
+                "kill": "kill_headshot" if details.get("headshot") else ("praise" if friend_name else "hype"),
                 "bomb_planted": "shock",
                 "bomb_defused": "hype",
                 "bomb_exploded": "shock",
@@ -221,6 +265,8 @@ class ChatterEngine:
                 "round_loss": "fail_sad",
             }
             tag = default_event_tags.get(event_type, "fail_sad")
+        elif event_type == "kill" and details.get("headshot"):
+            tag = "kill_headshot"
 
         speaker = bot_id.capitalize()
         for b in ["Vikram", "Kabir", "Marcus", "Sunny"]:
@@ -228,15 +274,20 @@ class ChatterEngine:
                 speaker = b
                 break
 
-        event_reasons = {
-            "kill": "triggered by headshot kill" if (details and details.get("headshot")) else "triggered by kill",
-            "death": f"triggered by {details.get('victim', 'teammate')}'s death" if details else "triggered by death",
-            "bomb_planted": "triggered by bomb plant",
-            "bomb_defused": "triggered by bomb defuse",
-            "bomb_exploded": "triggered by bomb explosion",
-            "round_win": "triggered by round win",
-            "round_loss": "triggered by round loss",
-        }
+        if details.get("reason"):
+            reason_str = details["reason"]
+        else:
+            event_reasons = {
+                "kill": "triggered by headshot kill" if details.get("headshot") else "triggered by kill",
+                "death": f"triggered by {details.get('victim', 'teammate')}'s death",
+                "bomb_planted": "triggered by bomb plant",
+                "bomb_defused": "triggered by bomb defuse",
+                "bomb_exploded": "triggered by bomb explosion",
+                "round_win": "triggered by round win",
+                "round_loss": "triggered by round loss",
+            }
+            reason_str = event_reasons.get(event_type, f"triggered by {event_type}")
+
         line = {
             "speaker": speaker,
             "text": text,
@@ -244,7 +295,7 @@ class ChatterEngine:
             "delay_ms": 1200,
             "mood": mood,
             "is_event": True,
-            "reason": event_reasons.get(event_type, f"triggered by {event_type}")
+            "reason": reason_str
         }
 
         def _dispatch_event():
@@ -265,12 +316,13 @@ class ChatterEngine:
 
         def _worker():
             try:
+                target_batch = self.get_target_batch_size()
                 batch_script, fight_meta, ok, err = self.llm_client.generate_batch_script(
                     game_context=self.game_context,
                     mood_dict=self.mood_dict,
                     recent_chat=self.recent_chat,
                     active_fight=self.active_fight,
-                    batch_size=10
+                    batch_size=target_batch
                 )
 
                 if ok and batch_script:
@@ -296,11 +348,16 @@ class ChatterEngine:
 
     def _refill_from_local_bank(self):
         clean_mode = (self.chat_style == "clean")
-        script = self.offline_bank.generate_idle_script(
+        target_size = self.get_target_batch_size()
+        current_map = self.game_context.get("map", "")
+        map_lines = generate_map_idle_batch(current_map, size=max(4, target_size // 2), clean_mode=clean_mode)
+        rem = max(2, target_size - len(map_lines))
+        generic_lines = self.offline_bank.generate_idle_script(
             active_bots=self.game_context.get("alive_teammates", ["Vikram", "Kabir", "Marcus", "Sunny"]),
-            size=10,
+            size=rem,
             clean_mode=clean_mode
         )
+        script = map_lines + generic_lines
         with self._lock:
             for line in script:
                 # Idle chatter lines show chat in-game without firing random timer sounds
@@ -383,6 +440,9 @@ class ChatterEngine:
             "chatter_speed": self.chatter_speed,
             "fight_frequency": self.fight_frequency,
             "chat_style": self.chat_style,
+            "human_count": self.human_count,
+            "human_players": list(self.human_players),
+            "batch_size": self.get_target_batch_size(),
             "recent_chat_count": len(self.recent_chat),
             "is_fetching": self.is_fetching
         }

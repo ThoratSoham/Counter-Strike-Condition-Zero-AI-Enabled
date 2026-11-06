@@ -4,6 +4,8 @@ import json
 import urllib.parse
 import os
 import threading
+from multiplayer import DEFAULT_SERVER_PORT, MOD_VERSION
+from multiplayer.vpn_check import detect_network_addresses
 from plugin.installer import setup_game_directory
 
 class WebUIServer:
@@ -51,7 +53,7 @@ class WebUIServer:
                     return
 
                 if path == "/api/test_say":
-                    outer_self.brain.respond_as_bot("vikram", "Hello! AI Teammate online and ready.", "hype")
+                    outer_self.brain.dispatch_bot_line("Vikram", "Hello! AI Teammate online and ready.", sound_tag="hype", is_critical=True, reason="Web UI test say")
                     self._send_json({"status": "ok", "message": "Triggered test say"})
                     return
 
@@ -144,7 +146,18 @@ class WebUIServer:
             except Exception:
                 pass
 
+        net = detect_network_addresses()
+        port = self.brain.config.get("server_port", DEFAULT_SERVER_PORT)
         return {
+            "mod_version": MOD_VERSION,
+            "multiplayer": {
+                "vpn_provider": net["vpn_provider"],
+                "vpn_ip": net["vpn_ip"],
+                "lan_ip": net["lan_ip"],
+                "share_connect": f"connect {net['preferred_ip']}:{port}",
+                "connected_humans": list(getattr(self.brain, "connected_humans", [])),
+                "match_name": self.brain.config.get("match_name", "CZ AI Teammates Squad Lobby"),
+            },
             "teammates": tm_list,
             "energy": self.brain.budget_manager.get_stats(),
             "logs": recent_logs

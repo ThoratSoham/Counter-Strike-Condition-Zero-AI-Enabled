@@ -34,9 +34,17 @@ mp_logecho 1
 mp_logfile 1
 logaddress_delall
 logaddress_add 127.0.0.1 27115
-rcon_password "czeroai"
 bot_chatter "off"
 bot_defer_to_human 1
+bot_auto_vacate 1
+sv_voiceenable 1
+sv_voicecodec "voice_speex"
+sv_voicequality 5
+mp_autoteambalance 1
+mp_limitteams 1
+allow_spectators 1
+exec vpn_net.cfg
+exec multiplayer_secret.cfg
 """
 
 def setup_game_directory(czero_dir="czero"):

@@ -17,6 +17,7 @@ from brain.llm_client import LLMClient
 from brain.chatter_engine import ChatterEngine
 from brain.offline_bank import get_offline_bank
 from brain.logger import get_logger
+from brain.map_callouts import build_map_direct_reply, maybe_pick_map_event_line
 
 def is_hl_process_running() -> bool:
     """
@@ -52,7 +53,7 @@ def is_hl_process_running() -> bool:
                 return False
             while True:
                 exe = pe.szExeFile.decode("latin-1", errors="ignore").lower()
-                if exe in ("hl.exe", "czero.exe", "cstrike.exe"):
+                if exe in ("hl.exe", "hlds.exe", "czero.exe", "cstrike.exe"):
                     return True
                 if not kernel32.Process32Next(snap, ctypes.byref(pe)):
                     break
@@ -112,7 +113,7 @@ class AIBrainService:
         self.rcon = GoldSrcRcon(
             host=self.config.get("server_host", "127.0.0.1"),
             port=self.config.get("server_port", 27015),
-            password=self.config.get("rcon_password", "czeroai")
+            password=self.config.get("rcon_password", "")
         )
         self.mood_manager = MoodManager(self.voice_engine.personalities)
         self.memory_manager = MemoryManager()
@@ -154,6 +155,8 @@ class AIBrainService:
         self.last_event_time = 0.0
         self.last_kill_react_time = 0.0
         self.last_round_start_time = 0.0
+        self.connected_humans = []
+        self.current_map = self.config.get("mp_start_map", "de_dust2_cz")
 
     def _load_config(self):
         if os.path.exists(self.config_path):
@@ -330,6 +333,35 @@ class AIBrainService:
             self.chatter_engine.reset_queue_and_memory()
             return
 
+        if event_name == "roster":
+            humans = data.get("humans", [])
+            map_name = data.get("map", "")
+            self.connected_humans = list(humans)
+            map_changed = bool(map_name and map_name != self.current_map)
+            if map_name:
+                self.current_map = map_name
+            req_left = max(0, self.budget_manager.daily_limit - self.llm_client.daily_requests)
+            budget_low = req_left < (self.budget_manager.daily_limit * 0.2)
+            self.chatter_engine.update_multiplayer_state(
+                human_players=self.connected_humans,
+                map_name=self.current_map,
+                budget_low=budget_low,
+            )
+            if map_changed:
+                self.chatter_engine.reset_queue_and_memory()
+            return
+
+        if event_name == "set_style":
+            new_style = data.get("style", "full_gamer").lower()
+            if new_style in ("clean", "banter", "full_gamer"):
+                self.chat_style = new_style
+                self.llm_client.set_chat_style(new_style)
+                self.chatter_engine.set_settings(chat_style=new_style)
+                self.meme_sound.chat_style = new_style
+                self.logger.log(0, f"[Brain] Multiplayer chat style updated to '{new_style}'.")
+                self.sync_status_to_plugin()
+            return
+
         if event_name == "test_sound":
             tag = data.get("tag", "hype")
             requester = data.get("requester", "")
@@ -356,6 +388,44 @@ class AIBrainService:
             attacker = data.get("attacker", "")
             victim = data.get("victim", "")
             headshot = data.get("headshot", False)
+            killer_human = bool(data.get("killer_human", False)) or (
+                bool(attacker) and any(h.lower() == attacker.lower() for h in self.connected_humans)
+            )
+            victim_human = bool(data.get("victim_human", False)) or (
+                bool(victim) and any(h.lower() == victim.lower() for h in self.connected_humans)
+            )
+            now = time.time()
+
+            # MP07: Prioritize hyping or roasting real human friends in multiplayer!
+            if killer_human and now - self.last_kill_react_time >= 2.5:
+                self.last_kill_react_time = now
+                reactor = random.choice(self.teammates)
+                self.mood_manager.update_on_kill(reactor, is_headshot=headshot)
+                self.chatter_engine.interrupt_with_event(
+                    reactor,
+                    "kill",
+                    {
+                        "headshot": headshot,
+                        "friend_name": attacker,
+                        "reason": f"hyping {attacker}'s {'headshot' if headshot else 'kill'}",
+                    },
+                )
+                return
+
+            if victim_human and now - self.last_kill_react_time >= 2.5:
+                self.last_kill_react_time = now
+                reactor = random.choice(self.teammates)
+                self.chatter_engine.interrupt_with_event(
+                    reactor,
+                    "death",
+                    {
+                        "victim": victim,
+                        "friend_name": victim,
+                        "roast_friend": True,
+                        "reason": f"roasting {victim}'s death",
+                    },
+                )
+                return
 
             for t_id in self.teammates:
                 if t_id in attacker.lower():
@@ -371,8 +441,7 @@ class AIBrainService:
                     self.chatter_engine.interrupt_with_event(reactor, "death", {"victim": t_id})
                     return
 
-            # Also react when standard Condition Zero bots (e.g. Opie, Frank, Harold) or Player die/kill
-            now = time.time()
+            # Also react when standard Condition Zero bots (e.g. Opie, Frank, Harold) die/kill
             if now - self.last_kill_react_time >= 4.0:
                 self.last_kill_react_time = now
                 reactor = random.choice(self.teammates)
@@ -399,7 +468,10 @@ class AIBrainService:
             if now - self.last_round_start_time >= 6.0:
                 self.last_round_start_time = now
                 caller = random.choice(self.teammates)
-                self.dispatch_bot_line(caller.capitalize(), "Round start! Let's get these frags!", sound_tag="greeting", reason="triggered by round start")
+                map_rs = maybe_pick_map_event_line(self.current_map, "round_start")
+                rs_text = map_rs[0] if map_rs else "Round start! Let's get these frags!"
+                rs_tag = (map_rs[1] or "greeting") if map_rs else "greeting"
+                self.dispatch_bot_line(caller.capitalize(), rs_text, sound_tag=rs_tag, reason="triggered by round start")
 
         elif event_name == "round_end":
             won = data.get("won", True)
@@ -435,10 +507,27 @@ class AIBrainService:
         reply_text = ""
         emotion_tag = ""
         if self.llm_client.is_online():
-            reply_text, emotion_tag, ok = self.llm_client.generate_single_reply(pers, message, {}, mood)
+            reply_text, emotion_tag, ok = self.llm_client.generate_single_reply(
+                pers,
+                message,
+                self.chatter_engine.game_context,
+                mood,
+                sender=sender,
+            )
 
         if not reply_text:
-            clean_mode = (self.chat_style == "clean")
-            reply_text, emotion_tag, _ = get_offline_bank().get_line(target_id, "idle_chat", clean_mode=clean_mode)
+            map_reply = build_map_direct_reply(self.current_map, message, speaker, sender=sender)
+            if map_reply:
+                reply_text, emotion_tag = map_reply
+            else:
+                clean_mode = (self.chat_style == "clean")
+                reply_text, emotion_tag, _ = get_offline_bank().get_line(target_id, "idle_chat", clean_mode=clean_mode)
+                if sender and sender.lower() not in ("player", "server") and sender.lower() not in reply_text.lower():
+                    if len(sender) + len(reply_text) < 140:
+                        reply_text = f"{sender}, {reply_text}"
+
+        req_left = max(0, self.budget_manager.daily_limit - self.llm_client.daily_requests)
+        if req_left < (self.budget_manager.daily_limit * 0.2):
+            self.chatter_engine.budget_low = True
 
         self.dispatch_bot_line(speaker, reply_text, sound_tag=emotion_tag, is_critical=True, reason=f"reply to {sender}")

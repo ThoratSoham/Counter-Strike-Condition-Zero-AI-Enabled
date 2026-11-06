@@ -1,0 +1,14 @@
+// overview description file for de_survivor_cz
+
+global 
+{
+	ZOOM	1.38
+	ORIGIN	832.00	880.00	-512.00
+	ROTATED	1
+}
+
+layer 
+{
+	IMAGE	"overviews/de_survivor_cz.bmp"
+	HEIGHT	-512.00
+}

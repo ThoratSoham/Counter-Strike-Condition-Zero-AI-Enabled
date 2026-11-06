@@ -1,0 +1,14 @@
+// overview description file for de_raid.bsp
+
+global 
+{
+	ZOOM	1.45
+	ORIGIN	0	0	128
+	ROTATED	0
+}
+
+layer 
+{
+	IMAGE	"overviews/de_raid.tga"
+	HEIGHT	-32
+}

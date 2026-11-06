@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 import os
 import time
 import socket
@@ -60,7 +60,7 @@ def main():
         if os.path.exists(hl_exe):
             print("[Main] Launching Counter-Strike: Condition Zero (hl.exe)...")
             subprocess.Popen(
-                [hl_exe, "-game", "czero", "-nomaster", "-insecure", "+exec", "listenserver.cfg"],
+                [hl_exe, "-game", "czero", "-gl", "-nomaster", "-insecure", "+exec", "listenserver.cfg"],
                 cwd=project_root
             )
         else:
@@ -96,3 +96,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
