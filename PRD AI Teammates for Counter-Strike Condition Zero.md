@@ -862,3 +862,116 @@ Building all 200 at once will fail. So we build in **milestones**. Each mileston
 ### 18.5 Open Questions
 
 None. The next step is to build **M0**.
+
+## 19. Multiplayer Mod: Play with Real Friends (New Scope)
+
+**This changes section 16.1.** The mod was single player only. Now it must also work with real friends in other cities and countries.
+
+### 19.1 Decisions from Q&A
+
+| Question | Answer |
+| --- | --- |
+| Number of friends | 10 or more |
+| How they connect | Free VPN app (Tailscale or ZeroTier). No router settings. |
+| AI bots in multiplayer | Both: a setting per match (Off / Fill empty slots / Always N bots) |
+| Game copy | Friends use the copy from the project's Git repo (see the warning in 19.2) |
+| Voice chat | Inside the game |
+| Host | Any friend can host a match |
+
+### 19.2 Important Warning: Game Files in the Repo
+
+Condition Zero belongs to Valve. Putting the full game files in a public GitHub repo is copyright infringement, and GitHub can remove the repo. Rule for the repo:
+
+- **Put in the repo:** our mod files, plugins, configs, installer, docs.
+- **Do not put in the repo:** the game's own files (maps, models, sounds, exe, dll from Valve) and the meme sounds.
+- **Friends must get CZ themselves** (the Steam version is the clean base). The installer then adds our mod on top of it.
+
+### 19.3 How Multiplayer Works
+
+1. **One host runs the server.** The host starts a CZ server (with the mod). It can be a dedicated server or a listen server from the host's PC.
+2. **A free VPN joins everyone into one private network.** Every friend gets a VPN IP. Friends connect to the host's VPN IP with `connect <host_vpn_ip>:27015`.
+3. **Any friend can host.** The host runs `host.bat`. It starts the server, finds the VPN IP, and shows a "share this" line to send to friends.
+4. **Friends join** with `join.bat` or by typing the IP in the console.
+5. **The server is private.** It is open only inside the VPN. No port forwarding, no public IP.
+
+**Limits to keep in mind**
+
+- GoldSrc supports up to 32 players per server. With 10 or more friends, plus bots, we stay under this.
+- VPN speed and ping depend on the distance between players and on whether the VPN can make a direct link. Pick a host that is close to most players.
+- Free VPN plans have device and user limits. Check the current limits for Tailscale and ZeroTier before choosing (Phase MP0).
+
+### 19.4 AI Bots in Multiplayer
+
+- The **AI brain runs only on the host's PC**. It sends chat lines to the server plugin, so **every player sees the bot chat** on screen like a normal player.
+- Each host needs their own free Google API key in their own `config.json`. If a host has no key, the bots use the local line bank (section 15).
+- The bots also react to **real players**: their kills, deaths, jokes, and chat. They can roast your friends, and fight each other.
+- **Setting per match:** AI bots Off / Fill empty slots (`bot_quota_mode fill`) / Always N bots. Real players always have priority for slots.
+- The free API limit is shared by the whole match. With many humans, the brain uses bigger batches (section 17) and talks less when the limit is near.
+- Sounds: the server plugin tells each player's game to play a sound tag. So **every friend needs the sounds folder installed** (the installer creates it from files they provide, or from free packs). If a friend lacks a sound, the game skips it quietly.
+
+### 19.5 Voice Chat
+
+- Use CZ's built-in voice chat. Enable it on the server (`sv_voiceenable 1`) and bind a push-to-talk key on each client (`+voicerecord`). The quality is old and low, but it works inside the game.
+- The installer sets the voice bind and a friendly guide for first use.
+- Optional later: Discord as a backup if the in-game voice is bad.
+- AI bots do not use voice. They use chat and meme sounds.
+
+### 19.6 Mod Stack (server and clients)
+
+An open-source project, Condition Zero Coop, shows that this stack works with Steam CZ and VPN play: ReGameDLL\_CS, Metamod-R, AMX Mod X, ReAPI, Orpheu, and YaPB bots. We study it first, and reuse its ideas where the license allows.
+
+- Server side: ReHLDS or the CZ server files, ReGameDLL\_CS, Metamod-R, AMX Mod X, ReAPI, our plugin, and our brain.
+- Client side: only the game, our small client pack (sounds, config), and the VPN app.
+
+### 19.7 Features for Multiplayer
+
+| ID | Feature |
+| --- | --- |
+| MP01 | `host.bat`: starts the server, brain, and shows the VPN IP |
+| MP02 | `join.bat`: asks for the host IP and connects |
+| MP03 | Version check: friends with a different mod version get a clear message |
+| MP04 | Match setup menu: map, rounds, friendly fire, bots, chat style |
+| MP05 | Team balance for 10+ players, with spectators |
+| MP06 | Bot filling: AI bots fill the empty slots in each team |
+| MP07 | Bots react to human chat and kills |
+| MP08 | Admin commands: kick, ban, restart, change map, pause |
+| MP09 | Map vote at the end of the match |
+| MP10 | Server rules and rcon password stored in the host's config, never in the repo |
+| MP11 | Voice setup helper (binds and a mic test) |
+| MP12 | Scoreboard banner with the match name |
+| MP13 | Reconnect help: a friend who drops can rejoin the same team |
+| MP14 | Network settings tuned for VPN (rates, update intervals) |
+| MP15 | Ping and VPN status check tool |
+
+### 19.8 Milestones
+
+| Milestone | Goal | Test to pass |
+| --- | --- | --- |
+| MP0: Research | Compare Tailscale and ZeroTier limits. Check the Condition Zero Coop project. Confirm that Steam CZ runs a multiplayer server with our plugin. | One host and one friend connect over the VPN and play a match. |
+| MP1: Two-player test | Host and 1 friend, no bots, with chat and voice. | Both players see the same chat, and the voice works. |
+| MP2: Installer | `install.bat`, `host.bat`, `join.bat`. | A new PC joins in under 15 minutes. |
+| MP3: Bots with humans | Bot filling and AI chat on the host. | Both humans see AI chat on screen. Bots fill empty slots. |
+| MP4: 10 or more players | Load test with many players. | No crash, ping is playable, FPS loss under 3%. |
+| MP5: Match tools | Admin commands, map vote, team balance, reconnect. | A full evening match with no restart of the server. |
+| MP6: Polish | Settings menu, status tools, README. | Friends can set up the match without your help. |
+
+### 19.9 Risks
+
+| Risk | Plan |
+| --- | --- |
+| Free VPN limits too small for 10+ friends | Check limits in MP0. If one VPN is not enough, try the other, or use a second one. |
+| High ping between countries | Choose the host near most players, tune network settings, and show the ping. |
+| Different game versions | Version check and an installer that sets the same files everywhere. |
+| Voice quality is poor | Teach the push-to-talk setup. Keep Discord as a backup. |
+| Sounds copyrighted | Keep sounds out of the repo. Each person adds their own sounds. |
+| Free API limit hit with many players | Batch calls, local fallback, and fewer AI lines when humans are chatty. |
+| Repo takedown | Do not host Valve's files. Provide only the mod. |
+| Griefing or cheating by someone | Admin tools, ban list, private VPN invites only. |
+
+### 19.10 Definition of Done (Multiplayer)
+
+1. 10 or more friends play a full match together over the VPN.
+2. Bots (if on) chat and react on every friend's screen.
+3. In-game voice works for everyone.
+4. Any friend can host with one click, and others join with one click.
+5. The repo has no Valve files, no API keys, and no copyrighted sounds.

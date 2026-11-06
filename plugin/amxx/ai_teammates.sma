@@ -18,7 +18,7 @@
 #include <sockets>
 
 #define PLUGIN_NAME    "CZ AI Teammates"
-#define PLUGIN_VERSION "1.3"
+#define PLUGIN_VERSION "2.0.0-MP"
 #define PLUGIN_AUTHOR  "AI Teammates Mod Team"
 
 // Comment out DEBUG to strip compile-time terminal logs, or toggle "ai_debug" cvar at runtime
@@ -62,6 +62,63 @@ new g_logFile[128];
 new g_cvarDebug;
 new g_cvarCooldownGlobal;
 new g_cvarCooldownTag;
+new g_cvarMatchName;
+new g_cvarBotMode;
+new g_cvarBotTarget;
+new g_cvarMaxRounds;
+new g_cvarChatBg;
+new g_cvarChatBgHold;
+
+// Low-Opacity Black Chat Background Overlay State (VGUI2 TutorTextWindow)
+#define CHAT_BG_LINES     3
+#define CHAT_BG_LINE_LEN  70
+#define TASK_HIDE_CHAT_BG 5600
+
+new g_msgTutorText = 0;
+new g_msgTutorClose = 0;
+new g_chatBgHistory[CHAT_BG_LINES][CHAT_BG_LINE_LEN];
+new g_chatBgCount = 0;
+
+// Multiplayer State (Section 19: MP03 - MP15)
+#define MAX_MP_MAPS 9
+#define MAX_RECONNECT_CACHE 32
+
+new const g_mpMaps[MAX_MP_MAPS][] = {
+    "de_raid",
+    "de_dust2_cz",
+    "de_inferno_cz",
+    "de_aztec_cz",
+    "de_cbble_cz",
+    "cs_italy_cz",
+    "cs_office_cz",
+    "de_prodigy_cz",
+    "de_tides_cz"
+};
+
+new g_selectedMenuMapIdx = 0;
+new bool:g_botModeExplicit = false;
+new g_lastAppliedBotQuota = -1;
+new g_roundsPlayed = 0;
+new bool:g_serverPaused = false;
+
+// Map Vote State (MP09)
+new bool:g_voteInProgress = false;
+new g_mapVotes[MAX_MP_MAPS];
+new bool:g_hasVoted[MAX_PLAYERS + 1];
+new g_nextWinningMap[32] = "";
+new Float:g_lastVoteTime = -99.0;
+
+// Reconnect Tracking Table (MP13)
+new bool:g_slotWasConnected[MAX_PLAYERS + 1];
+new g_slotCachedName[MAX_PLAYERS + 1][MAX_NAME_LENGTH];
+new g_slotCachedIp[MAX_PLAYERS + 1][32];
+new g_slotCachedTeam[MAX_PLAYERS + 1];
+
+new g_recName[MAX_RECONNECT_CACHE][MAX_NAME_LENGTH];
+new g_recIp[MAX_RECONNECT_CACHE][32];
+new g_recTeam[MAX_RECONNECT_CACHE];
+new Float:g_recSeen[MAX_RECONNECT_CACHE];
+new g_recWriteIdx = 0;
 
 // Sound Cooldown & Anti-Repeat State
 new Float:g_lastGlobalSoundTime = -99.0;
@@ -324,6 +381,15 @@ public plugin_init() {
     g_cvarDebug = register_cvar("ai_debug", "1");
     g_cvarCooldownGlobal = register_cvar("ai_sound_cooldown_global", "3.0");
     g_cvarCooldownTag = register_cvar("ai_sound_cooldown_tag", "8.0");
+    g_cvarMatchName = register_cvar("ai_match_name", "CZ AI Teammates Squad Lobby");
+    g_cvarBotMode = register_cvar("ai_mp_bot_mode", "1");       // 0=Off, 1=Fill, 2=Always N
+    g_cvarBotTarget = register_cvar("ai_mp_bot_target", "8");
+    g_cvarMaxRounds = register_cvar("ai_mp_maxrounds", "15");
+    g_cvarChatBg = register_cvar("ai_chat_bg", "1");            // 1=Low-opacity black background behind bot chat
+    g_cvarChatBgHold = register_cvar("ai_chat_bg_hold", "9.0"); // Seconds before backdrop auto-hides
+
+    g_msgTutorText = get_user_msgid("TutorText");
+    g_msgTutorClose = get_user_msgid("TutorClose");
 
     // Setup logging path: logs/mod.log in mod root
     get_basedir(g_logFile, charsmax(g_logFile));
@@ -354,6 +420,20 @@ public plugin_init() {
     register_concmd("ai_reset", "cmd_ai_reset", -1, "Clears chatter queue and resets fight memory");
     register_concmd("ai_status", "cmd_ai_status", -1, "Shows plugin, brain, API, requests left, queue, fight state");
 
+    // Section 19 Multiplayer Commands (MP04, MP05, MP08, MP09, MP11, MP15)
+    register_concmd("ai_match_menu", "cmd_ai_match_menu", -1, "Opens Multiplayer Match Setup Menu (MP04)");
+    register_concmd("ai_admin_menu", "cmd_ai_admin_menu", -1, "Opens Host/Admin Control Menu (MP08)");
+    register_concmd("ai_balance", "cmd_ai_balance", -1, "Balances human teams for 10+ player matches (MP05)");
+    register_concmd("ai_kick", "cmd_ai_kick", -1, "<name|#userid> - Kicks a player (MP08)");
+    register_concmd("ai_ban", "cmd_ai_ban", -1, "<name|#userid> [minutes] - Bans a player (MP08)");
+    register_concmd("ai_restart", "cmd_ai_restart", -1, "Restarts the current round (MP08)");
+    register_concmd("ai_map", "cmd_ai_map", -1, "<mapname> - Changes server map (MP08)");
+    register_concmd("ai_pause", "cmd_ai_pause", -1, "Toggles match pause (MP08)");
+    register_concmd("ai_votemap", "cmd_ai_votemap", -1, "Starts a multiplayer map vote (MP09)");
+    register_concmd("ai_voice_test", "cmd_ai_voice_test", -1, "Tests your mic for 8 seconds with loopback (MP11)");
+    register_concmd("ai_ping", "cmd_ai_ping", -1, "Displays live VPN ping & packet loss for all players (MP15)");
+    register_concmd("ai_chat_bg_toggle", "cmd_ai_chat_bg_toggle", -1, "Toggles low-opacity black background behind bot chat");
+
     // Hook player chat (say and say_team)
     register_clcmd("say", "hook_player_say");
     register_clcmd("say_team", "hook_player_say_team");
@@ -375,6 +455,7 @@ public plugin_init() {
     // Poll incoming Brain packets every 0.1s and send "HEARTBEAT|alive" every 2.0s (Step 2)
     set_task(0.1, "socket_poll_task", _, _, _, "b");
     set_task(2.0, "send_heartbeat_task", _, _, _, "b");
+    set_task(5.0, "sync_multiplayer_task", 4050, _, _, "b");
     set_task(8.0, "check_brain_startup_task");
     set_task(random_float(10.0, 16.0), "idle_chatter_watchdog_task", 4040);
 }
@@ -482,6 +563,108 @@ stock notify_player_and_chat(id, const chat_fmt[], any:...) {
         console_print(id, "%s", plain);
     }
     debug_log("%s", plain);
+}
+
+/**
+ * Renders a rolling 3-line Bot Chat & Sound feed inside Condition Zero's native
+ * VGUI2 TutorTextWindow panel, styled with a low-opacity black background
+ * ("WindowBG" "0 0 0 115" in czero/resource/TutorScheme.res) so bot lines remain
+ * clearly visible against bright map surfaces (Dust2 sand, sky, snow, etc.).
+ *
+ * TutorText packet format verified against czero/dlls/mp.dll:
+ *   write_string(text)   - rolling newline-separated lines (capped < 210 bytes)
+ *   write_byte(0)        - 0 localization args
+ *   write_short(0)       - event ID 0
+ *   write_short(is_dead) - 0 if alive, 1 if dead/spectator so all states see it
+ *   write_short(class)   - 1=Default White, 2=T Red, 4=CT Blue, 8=Sound Green
+ */
+stock push_chat_bg_line(const raw_line[], color_class = 1) {
+    if (!g_cvarChatBg || !get_pcvar_num(g_cvarChatBg) || g_msgTutorText <= 0) {
+        return;
+    }
+
+    new clean[128];
+    copy(clean, charsmax(clean), raw_line);
+    strip_color_codes(clean, charsmax(clean));
+    sanitize_chat_text(clean, charsmax(clean));
+    trim(clean);
+    if (!clean[0]) return;
+
+    // Truncate individual line at 66 chars so 3 lines + newlines stay well under GoldSrc's 250B usermsg cap
+    if (strlen(clean) > 66) {
+        clean[63] = '.';
+        clean[64] = '.';
+        clean[65] = '.';
+        clean[66] = EOS;
+    }
+
+    if (g_chatBgCount < CHAT_BG_LINES) {
+        copy(g_chatBgHistory[g_chatBgCount], CHAT_BG_LINE_LEN - 1, clean);
+        g_chatBgCount++;
+    } else {
+        for (new i = 0; i < CHAT_BG_LINES - 1; i++) {
+            copy(g_chatBgHistory[i], CHAT_BG_LINE_LEN - 1, g_chatBgHistory[i + 1]);
+        }
+        copy(g_chatBgHistory[CHAT_BG_LINES - 1], CHAT_BG_LINE_LEN - 1, clean);
+    }
+
+    new combined[220] = "";
+    for (new i = 0; i < g_chatBgCount; i++) {
+        if (i > 0) {
+            add(combined, charsmax(combined), "^n");
+        }
+        add(combined, charsmax(combined), g_chatBgHistory[i]);
+    }
+
+    new max_pl = get_maxplayers();
+    for (new pid = 1; pid <= max_pl; pid++) {
+        if (is_user_connected(pid) && !is_user_bot(pid)) {
+            message_begin(MSG_ONE_UNRELIABLE, g_msgTutorText, _, pid);
+            write_string(combined);
+            write_byte(0);
+            write_short(0);
+            write_short(is_user_alive(pid) ? 0 : 1);
+            write_short(color_class);
+            message_end();
+        }
+    }
+
+    new Float:hold_secs = g_cvarChatBgHold ? get_pcvar_float(g_cvarChatBgHold) : 9.0;
+    if (hold_secs < 2.0) hold_secs = 2.0;
+    remove_task(TASK_HIDE_CHAT_BG);
+    set_task(hold_secs, "hide_chat_bg_task", TASK_HIDE_CHAT_BG);
+}
+
+stock close_chat_bg_for_all() {
+    g_chatBgCount = 0;
+    if (g_msgTutorClose <= 0) return;
+
+    new max_pl = get_maxplayers();
+    for (new pid = 1; pid <= max_pl; pid++) {
+        if (is_user_connected(pid) && !is_user_bot(pid)) {
+            message_begin(MSG_ONE_UNRELIABLE, g_msgTutorClose, _, pid);
+            message_end();
+        }
+    }
+}
+
+public hide_chat_bg_task() {
+    close_chat_bg_for_all();
+}
+
+public cmd_ai_chat_bg_toggle(id) {
+    new next_val = get_pcvar_num(g_cvarChatBg) ? 0 : 1;
+    set_pcvar_num(g_cvarChatBg, next_val);
+    if (!next_val) {
+        remove_task(TASK_HIDE_CHAT_BG);
+        close_chat_bg_for_all();
+    }
+    notify_player_and_chat(id, "^4[Chat Backdrop] ^1Low-opacity black chat background is now ^4%s ^1(toggle with ^4!chatbg^1).",
+        next_val ? "ON" : "OFF");
+    if (next_val) {
+        push_chat_bg_line("[AI] Low-opacity black chat background enabled!", 8);
+    }
+    return PLUGIN_HANDLED;
 }
 
 stock debug_log(const fmt[], any:...) {
@@ -741,6 +924,10 @@ stock play_attributed_sound(id, const raw_sound_path[], const tag[], const reaso
         ai_chat_print(0, color_sender, "^4[SOUND] ^3%s ^1played ^4^"%s^"", speaker_name, friendly_label);
     }
 
+    new bgSoundLine[128];
+    formatex(bgSoundLine, charsmax(bgSoundLine), "[SOUND] %s: ^"%s^"", speaker_name, friendly_label);
+    push_chat_bg_line(bgSoundLine, 8);
+
     new logMsg[256];
     formatex(logMsg, charsmax(logMsg), "Sound played in-game by '%s': ^"%s^" [%s] (%s)", speaker_name, friendly_label, spk_path, clean_reason[0] ? clean_reason : "event");
     log_step(7, logMsg);
@@ -937,6 +1124,10 @@ stock execute_bot_say(const bot_name[], const message[]) {
         ai_chat_print(0, color_sender, "^3(Counter-Terrorist) %s ^1:  %s", safe_name, safe_msg);
     }
 
+    new bgBotLine[160];
+    formatex(bgBotLine, charsmax(bgBotLine), "[%s] %s: %s", (team_num == 1) ? "T" : "CT", safe_name, safe_msg);
+    push_chat_bg_line(bgBotLine, (team_num == 1) ? 2 : 4);
+
     new logMsg[256];
     formatex(logMsg, charsmax(logMsg), "Chat message sent into the game as a bot: [%s] %s", safe_name, safe_msg);
     log_step(6, logMsg);
@@ -1076,6 +1267,56 @@ stock bool:check_chat_sound_command(id, const message[]) {
         return true;
     }
 
+    // Section 19 Multiplayer Chat Shortcuts (MP04, MP05, MP08, MP09, MP11, MP15)
+    if (equali(cmd, "match") || equali(cmd, "setup") || equali(cmd, "settings")) {
+        cmd_ai_match_menu(id);
+        return true;
+    }
+    if (equali(cmd, "admin")) {
+        cmd_ai_admin_menu(id);
+        return true;
+    }
+    if (equali(cmd, "balance") || equali(cmd, "teams")) {
+        cmd_ai_balance(id);
+        return true;
+    }
+    if (equali(cmd, "spec") || equali(cmd, "spectate")) {
+        move_player_to_spec(id);
+        return true;
+    }
+    if (equali(cmd, "join") || equali(cmd, "play")) {
+        move_player_to_active_team(id);
+        return true;
+    }
+    if (equali(cmd, "votemap") || equali(cmd, "rtv") || equali(cmd, "mapvote")) {
+        cmd_ai_votemap(id);
+        return true;
+    }
+    if (equali(cmd, "mictest") || equali(cmd, "voicetest")) {
+        cmd_ai_voice_test(id);
+        return true;
+    }
+    if (equali(cmd, "voice") || equali(cmd, "mic")) {
+        show_voice_help(id);
+        return true;
+    }
+    if (equali(cmd, "ping") || equali(cmd, "pings") || equali(cmd, "vpn")) {
+        cmd_ai_ping(id);
+        return true;
+    }
+    if (equali(cmd, "pause")) {
+        cmd_ai_pause(id);
+        return true;
+    }
+    if (equali(cmd, "restart") || equali(cmd, "rr")) {
+        cmd_ai_restart(id);
+        return true;
+    }
+    if (equali(cmd, "chatbg") || equali(cmd, "backdrop")) {
+        cmd_ai_chat_bg_toggle(id);
+        return true;
+    }
+
     new matched_tag[32] = "";
     if (equali(cmd, "sound") || equali(cmd, "play")) {
         if (arg[0] != EOS) {
@@ -1142,6 +1383,10 @@ stock handle_chat_input(id, const message[], bool:is_team) {
     new name[MAX_NAME_LENGTH];
     get_user_name(id, name, charsmax(name));
 
+    new bgHumanLine[160];
+    formatex(bgHumanLine, charsmax(bgHumanLine), "%s: %s", name, message);
+    push_chat_bg_line(bgHumanLine, 1);
+
     new logMsg[256];
     formatex(logMsg, charsmax(logMsg), "Game event sent from plugin to brain service: player_chat by '%s' ('%s')", name, message);
     log_step(2, logMsg);
@@ -1154,8 +1399,11 @@ stock handle_chat_input(id, const message[], bool:is_team) {
     formatex(g_lastEventReason, charsmax(g_lastEventReason), "reply to %s's chat", name);
 
     if (g_socket > 0) {
+        new team_num = get_player_team_num(id);
+        new team_label[16];
+        copy(team_label, charsmax(team_label), (team_num == 1) ? "TERRORIST" : "CT");
         new packet[256];
-        formatex(packet, charsmax(packet), "EVENT|chat|%s|CT|%d|%s", name, is_team ? 1 : 0, message);
+        formatex(packet, charsmax(packet), "EVENT|chat|%s|%s|%d|%s", name, team_label, is_team ? 1 : 0, message);
         socket_send(g_socket, packet, strlen(packet));
     } else {
         log_offline("Brain service socket not open. Triggering local reply.");
@@ -1333,9 +1581,12 @@ stock handle_kill_event(killer_id, victim_id, const killer_name[], const victim_
     formatex(logMsg, charsmax(logMsg), "Game event sent from plugin: kill by '%s' on '%s' with %s (hs:%d)", killer_name, victim_name, weapon, headshot);
     log_step(2, logMsg);
 
+    new killer_human = (killer_id > 0 && killer_id <= MAX_PLAYERS && is_user_connected(killer_id) && !is_user_bot(killer_id)) ? 1 : 0;
+    new victim_human = (victim_id > 0 && victim_id <= MAX_PLAYERS && is_user_connected(victim_id) && !is_user_bot(victim_id)) ? 1 : 0;
+
     if (g_socket > 0) {
         new packet[256];
-        formatex(packet, charsmax(packet), "EVENT|kill|%s|%s|%s|%d", killer_name, victim_name, weapon, headshot);
+        formatex(packet, charsmax(packet), "EVENT|kill|%s|%s|%s|%d|%d|%d", killer_name, victim_name, weapon, headshot, killer_human, victim_human);
         socket_send(g_socket, packet, strlen(packet));
     }
 
@@ -1396,6 +1647,7 @@ public event_round_start() {
     copy(g_lastEventReason, charsmax(g_lastEventReason), "triggered by round start");
 
     log_step(2, "Game event sent from plugin: round_start");
+    check_auto_balance_humans();
     if (g_socket > 0) {
         new packet[] = "EVENT|round_start";
         socket_send(g_socket, packet, strlen(packet));
@@ -1489,6 +1741,14 @@ stock notify_round_end(bool:won) {
             play_attributed_sound(g_lastEventActorId, "", "fail_sad", "triggered by round loss", "Kabir", "", false);
             execute_bot_say("Kabir", "We threw that round so hard it hurts physically.");
         }
+    }
+
+    // MP09: Track rounds played and automatically launch end-of-match map vote when limit reached
+    g_roundsPlayed++;
+    new max_rounds = g_cvarMaxRounds ? get_pcvar_num(g_cvarMaxRounds) : 0;
+    if (max_rounds > 0 && g_roundsPlayed >= max_rounds && !g_voteInProgress) {
+        ai_chat_print(0, print_team_default, "^4[Match] ^1Reached ^4%d ^1rounds! Starting end-of-match map vote...", max_rounds);
+        set_task(2.0, "start_map_vote_task", 5400);
     }
 }
 
@@ -1624,5 +1884,765 @@ public cmd_ai_status(id) {
         g_brainConnected ? "CONNECTED" : "OFFLINE", g_apiStatus, g_requestsLeft);
     ai_chat_print(id, print_team_default, "^4[AI Status] ^1Queue: ^4%d ^1| Fight: ^4%s ^1| Speed: ^4%s ^1| Style: ^4%s",
         g_queueSize, g_fightState, g_chatterSpeed, g_chatStyle);
+    return PLUGIN_HANDLED;
+}
+
+// =========================================================================
+// SECTION 19: MULTIPLAYER MOD FEATURES (MP03 - MP15)
+// =========================================================================
+
+stock count_human_players() {
+    new count = 0;
+    for (new i = 1; i <= get_maxplayers(); i++) {
+        if (is_user_connected(i) && !is_user_bot(i)) {
+            count++;
+        }
+    }
+    return count;
+}
+
+stock bool:is_match_admin(id) {
+    if (id == 0) return true; // Server console / RCON
+    if (id < 0 || id > MAX_PLAYERS || !is_user_connected(id)) return false;
+    if (id == 1 && !is_dedicated_server()) return true; // Listen server host
+    if (get_user_flags(id) & (ADMIN_KICK | ADMIN_RCON | ADMIN_BAN | ADMIN_MAP)) return true;
+
+    new ip[32];
+    get_user_ip(id, ip, charsmax(ip), 1);
+    if (equal(ip, "127.0.0.1") || equal(ip, "loopback")) return true; // Host joining own hlds.exe
+    return false;
+}
+
+stock save_reconnect_entry(const name[], const ip[], team_num) {
+    if (!name[0] || team_num <= 0) return;
+
+    // Update existing entry if present
+    for (new i = 0; i < MAX_RECONNECT_CACHE; i++) {
+        if (g_recName[i][0] != EOS && (equali(g_recName[i], name) || (ip[0] != EOS && equal(g_recIp[i], ip)))) {
+            copy(g_recName[i], MAX_NAME_LENGTH - 1, name);
+            copy(g_recIp[i], 31, ip);
+            g_recTeam[i] = team_num;
+            g_recSeen[i] = get_gametime();
+            return;
+        }
+    }
+
+    copy(g_recName[g_recWriteIdx], MAX_NAME_LENGTH - 1, name);
+    copy(g_recIp[g_recWriteIdx], 31, ip);
+    g_recTeam[g_recWriteIdx] = team_num;
+    g_recSeen[g_recWriteIdx] = get_gametime();
+    g_recWriteIdx = (g_recWriteIdx + 1) % MAX_RECONNECT_CACHE;
+}
+
+stock find_reconnect_team(const name[], const ip[]) {
+    new Float:now = get_gametime();
+    for (new i = 0; i < MAX_RECONNECT_CACHE; i++) {
+        if (g_recName[i][0] == EOS) continue;
+        if (now - g_recSeen[i] > 1800.0) continue; // Expire after 30 minutes
+        if (equali(g_recName[i], name) || (ip[0] != EOS && !equal(ip, "127.0.0.1") && equal(g_recIp[i], ip))) {
+            return g_recTeam[i];
+        }
+    }
+    return 0;
+}
+
+// MP03 (Version Check) + MP12 (Scoreboard Banner) + MP13 (Reconnect Help)
+public client_putinserver(id) {
+    if (id <= 0 || id > MAX_PLAYERS || is_user_bot(id)) return;
+    remove_task(5100 + id);
+    set_task(3.5, "welcome_and_check_client_task", 5100 + id);
+}
+
+public welcome_and_check_client_task(taskid) {
+    new id = taskid - 5100;
+    if (id <= 0 || id > MAX_PLAYERS || !is_user_connected(id) || is_user_bot(id)) return;
+
+    new name[MAX_NAME_LENGTH], ip[32];
+    get_user_name(id, name, charsmax(name));
+    get_user_ip(id, ip, charsmax(ip), 1);
+
+    // MP12: Scoreboard banner & welcome message
+    new match_name[64];
+    get_pcvar_string(g_cvarMatchName, match_name, charsmax(match_name));
+    if (match_name[0] != EOS) {
+        server_cmd("hostname ^"%s^"", match_name);
+    }
+    new humans = count_human_players();
+    ai_chat_print(id, print_team_default, "^4[%s] ^1Welcome ^3%s^1! (^4%d^1 friends online | Hold ^4K^1=Voice | ^4!sounds !ping !votemap^1)",
+        match_name[0] ? match_name : "CZ AI Squad", name, humans);
+
+    // MP03: Client Mod Version Check
+    new client_ver[32];
+    get_user_info(id, "ai_mod_ver", client_ver, charsmax(client_ver));
+    if (!equal(client_ver, PLUGIN_VERSION)) {
+        if (client_ver[0] == EOS) {
+            ai_chat_print(id, print_team_default, "^4[Version Check] ^1Mod tag missing (Server ^4v%s^1). Run ^4install.bat^1 or ^4join.bat^1 for full voice & sound sync!", PLUGIN_VERSION);
+        } else {
+            ai_chat_print(0, id, "^4[Version Mismatch] ^3%s ^1is on ^4v%s ^1(Host has ^4v%s^1). Run ^4install.bat^1 so sounds match!", name, client_ver, PLUGIN_VERSION);
+        }
+    }
+
+    // MP13: Reconnect Detection & Team Restoration
+    new prev_team = find_reconnect_team(name, ip);
+    new cur_team = get_player_team_num(id);
+    if ((prev_team == 1 || prev_team == 2) && cur_team == 0) {
+        ai_chat_print(0, id, "^4[Reconnect] ^1Welcome back ^3%s^1! Restoring you to ^4%s^1.",
+            name, (prev_team == 1) ? "Terrorists" : "Counter-Terrorists");
+        client_cmd(id, "jointeam %d; wait; wait; menuselect 5", prev_team);
+    }
+}
+
+// MP06 (Bot Filling & Human Priority) + MP13 Snapshot + ROSTER Sync to Python Brain
+public sync_multiplayer_task() {
+    new max_pl = get_maxplayers();
+    new human_count = 0;
+    new bot_count = 0;
+    new roster_csv[192] = "";
+    new map_name[32];
+    get_mapname(map_name, charsmax(map_name));
+
+    for (new i = 1; i <= max_pl; i++) {
+        new bool:conn = bool:is_user_connected(i);
+        if (conn && !is_user_bot(i)) {
+            human_count++;
+            new name[MAX_NAME_LENGTH], ip[32];
+            get_user_name(i, name, charsmax(name));
+            get_user_ip(i, ip, charsmax(ip), 1);
+            new t_num = get_player_team_num(i);
+
+            g_slotWasConnected[i] = true;
+            copy(g_slotCachedName[i], MAX_NAME_LENGTH - 1, name);
+            copy(g_slotCachedIp[i], 31, ip);
+            if (t_num == 1 || t_num == 2) {
+                g_slotCachedTeam[i] = t_num;
+            }
+
+            if (strlen(roster_csv) + strlen(name) + 2 < charsmax(roster_csv)) {
+                if (roster_csv[0] != EOS) add(roster_csv, charsmax(roster_csv), ",");
+                add(roster_csv, charsmax(roster_csv), name);
+            }
+        } else if (conn && is_user_bot(i)) {
+            bot_count++;
+        } else if (!conn && g_slotWasConnected[i]) {
+            // Player disconnected since last check — save into reconnect table (MP13)
+            save_reconnect_entry(g_slotCachedName[i], g_slotCachedIp[i], g_slotCachedTeam[i]);
+            g_slotWasConnected[i] = false;
+            g_slotCachedName[i][0] = EOS;
+            g_slotCachedIp[i][0] = EOS;
+            g_slotCachedTeam[i] = 0;
+        }
+    }
+
+    // Send connected human roster & active map name to Python Brain (MP07, 19.4 API scaling & map callouts)
+    if (g_socket > 0) {
+        new pkt[256];
+        formatex(pkt, charsmax(pkt), "ROSTER|%d|%s|%s", human_count, roster_csv, map_name);
+        socket_send(g_socket, pkt, strlen(pkt));
+    }
+
+    // MP06: Enforce AI Bot Mode while ALWAYS reserving free slots for incoming human friends
+    if (human_count == 0) return;
+
+    new mode = get_pcvar_num(g_cvarBotMode);      // 0=Off, 1=Fill, 2=Always N
+    new target = get_pcvar_num(g_cvarBotTarget);  // e.g. 8
+    new free_for_bots = max_pl - human_count - 2; // Keep at least 2 slots open for joining friends
+    if (free_for_bots < 0) free_for_bots = 0;
+
+    new desired_quota = -1;
+    if (mode == 0) {
+        desired_quota = 0;
+    } else if (mode == 1) {
+        // Fill empty slots up to target total players (in solo New Game, keep user's menu bot_quota unless explicitly changed)
+        if (human_count >= 2 || g_botModeExplicit) {
+            desired_quota = target - human_count;
+            if (desired_quota < 0) desired_quota = 0;
+            if (desired_quota > free_for_bots) desired_quota = free_for_bots;
+        }
+    } else if (mode == 2) {
+        // Always N bots (unless humans need the server slots)
+        desired_quota = target;
+        if (desired_quota > free_for_bots) desired_quota = free_for_bots;
+        if (desired_quota < 0) desired_quota = 0;
+    }
+
+    if (desired_quota >= 0 && desired_quota != g_lastAppliedBotQuota) {
+        g_lastAppliedBotQuota = desired_quota;
+        server_cmd("bot_auto_vacate 1; bot_quota %d", desired_quota);
+    }
+}
+
+// =========================================================================
+// MP04: INTERACTIVE MATCH SETUP MENU (ai_match_menu / !match)
+// =========================================================================
+
+public cmd_ai_match_menu(id) {
+    if (id <= 0 || !is_user_connected(id)) {
+        console_print(id, "[Match] Usage in-game: !match or ai_match_menu (Cvars: ai_mp_bot_mode, ai_mp_bot_target, ai_mp_maxrounds).");
+        return PLUGIN_HANDLED;
+    }
+    if (!is_match_admin(id)) {
+        ai_chat_print(id, print_team_default, "^4[Match] ^1Only the Match Host can open the Match Setup Menu (^4!match^1).");
+        return PLUGIN_HANDLED;
+    }
+    open_match_setup_menu(id);
+    return PLUGIN_HANDLED;
+}
+
+stock open_match_setup_menu(id) {
+    new title[96];
+    formatex(title, charsmax(title), "\y[Host] Multiplayer Match Setup (v%s):", PLUGIN_VERSION);
+    new menu = menu_create(title, "match_setup_menu_handler");
+
+    new item[96];
+    new mode = get_pcvar_num(g_cvarBotMode);
+    new target = get_pcvar_num(g_cvarBotTarget);
+    new max_r = get_pcvar_num(g_cvarMaxRounds);
+    new ff = get_cvar_num("mp_friendlyfire");
+    new alltalk = get_cvar_num("sv_alltalk");
+
+    new mode_str[24];
+    if (mode == 0) copy(mode_str, charsmax(mode_str), "OFF (Humans Only)");
+    else if (mode == 1) copy(mode_str, charsmax(mode_str), "FILL Empty Slots");
+    else copy(mode_str, charsmax(mode_str), "ALWAYS N Bots");
+
+    formatex(item, charsmax(item), "\wSelect Map: \y%s", g_mpMaps[g_selectedMenuMapIdx]);
+    menu_additem(menu, item, "1");
+
+    if (max_r > 0) formatex(item, charsmax(item), "\wMax Rounds: \y%d Rounds", max_r);
+    else formatex(item, charsmax(item), "\wMax Rounds: \yUnlimited");
+    menu_additem(menu, item, "2");
+
+    formatex(item, charsmax(item), "\wFriendly Fire: %s", ff ? "\rON" : "\yOFF");
+    menu_additem(menu, item, "3");
+
+    formatex(item, charsmax(item), "\wAI Bots Mode: \y%s", mode_str);
+    menu_additem(menu, item, "4");
+
+    formatex(item, charsmax(item), "\wAI Bot Target Count: \y%d", target);
+    menu_additem(menu, item, "5");
+
+    formatex(item, charsmax(item), "\wAI Chat Style: \y%s", g_chatStyle);
+    menu_additem(menu, item, "6");
+
+    formatex(item, charsmax(item), "\wVoice Chat Scope: \y%s", alltalk ? "AllTalk (Everyone)" : "Team Only");
+    menu_additem(menu, item, "7");
+
+    formatex(item, charsmax(item), "\wChat Black Backdrop: %s", get_pcvar_num(g_cvarChatBg) ? "\yON" : "\rOFF");
+    menu_additem(menu, item, "10");
+
+    menu_additem(menu, "\yRestart Round Now (sv_restart 1)", "8");
+    formatex(item, charsmax(item), "\rChange Map Now -> %s", g_mpMaps[g_selectedMenuMapIdx]);
+    menu_additem(menu, item, "9");
+
+    menu_setprop(menu, MPROP_EXIT, MEXIT_ALL);
+    menu_display(id, menu, 0);
+}
+
+public match_setup_menu_handler(id, menu, item) {
+    if (item == MENU_EXIT || !is_user_connected(id)) {
+        menu_destroy(menu);
+        return PLUGIN_HANDLED;
+    }
+
+    new info[8], name_buf[64], access, callback;
+    menu_item_getinfo(menu, item, access, info, charsmax(info), name_buf, charsmax(name_buf), callback);
+    menu_destroy(menu);
+
+    if (!is_match_admin(id)) return PLUGIN_HANDLED;
+    new choice = str_to_num(info);
+
+    if (choice == 1) {
+        g_selectedMenuMapIdx = (g_selectedMenuMapIdx + 1) % MAX_MP_MAPS;
+    } else if (choice == 2) {
+        new cur = get_pcvar_num(g_cvarMaxRounds);
+        new next_r = (cur == 9) ? 12 : ((cur == 12) ? 15 : ((cur == 15) ? 24 : ((cur == 24) ? 0 : 9)));
+        set_pcvar_num(g_cvarMaxRounds, next_r);
+        server_cmd("mp_maxrounds %d", next_r);
+        ai_chat_print(0, id, "^4[Match Setup] ^1Max Rounds set to ^4%d^1.", next_r);
+    } else if (choice == 3) {
+        new next_ff = get_cvar_num("mp_friendlyfire") ? 0 : 1;
+        server_cmd("mp_friendlyfire %d", next_ff);
+        ai_chat_print(0, id, "^4[Match Setup] ^1Friendly Fire is now ^4%s^1.", next_ff ? "ON" : "OFF");
+    } else if (choice == 4) {
+        new next_m = (get_pcvar_num(g_cvarBotMode) + 1) % 3;
+        set_pcvar_num(g_cvarBotMode, next_m);
+        g_botModeExplicit = true;
+        g_lastAppliedBotQuota = -1;
+        sync_multiplayer_task();
+        ai_chat_print(0, id, "^4[Match Setup] ^1AI Bot Mode: ^4%s^1.",
+            (next_m == 0) ? "OFF" : ((next_m == 1) ? "FILL Empty Slots" : "ALWAYS N Bots"));
+    } else if (choice == 5) {
+        new cur_t = get_pcvar_num(g_cvarBotTarget);
+        new next_t = (cur_t >= 14) ? 4 : (cur_t + 2);
+        set_pcvar_num(g_cvarBotTarget, next_t);
+        g_botModeExplicit = true;
+        g_lastAppliedBotQuota = -1;
+        sync_multiplayer_task();
+        ai_chat_print(0, id, "^4[Match Setup] ^1AI Bot Target Count set to ^4%d^1.", next_t);
+    } else if (choice == 6) {
+        new next_style[16];
+        if (equali(g_chatStyle, "clean")) {
+            copy(next_style, charsmax(next_style), "banter");
+            copy(g_chatStyle, charsmax(g_chatStyle), "Banter");
+        } else if (equali(g_chatStyle, "banter")) {
+            copy(next_style, charsmax(next_style), "full_gamer");
+            copy(g_chatStyle, charsmax(g_chatStyle), "Full gamer");
+        } else {
+            copy(next_style, charsmax(next_style), "clean");
+            copy(g_chatStyle, charsmax(g_chatStyle), "Clean");
+        }
+        if (g_socket > 0) {
+            new pkt[32];
+            formatex(pkt, charsmax(pkt), "SET_STYLE|%s", next_style);
+            socket_send(g_socket, pkt, strlen(pkt));
+        }
+        ai_chat_print(0, id, "^4[Match Setup] ^1AI Chat Style changed to ^4%s^1.", g_chatStyle);
+    } else if (choice == 7) {
+        new next_at = get_cvar_num("sv_alltalk") ? 0 : 1;
+        server_cmd("sv_alltalk %d", next_at);
+        ai_chat_print(0, id, "^4[Match Setup] ^1Voice Chat: ^4%s^1.", next_at ? "AllTalk (Everyone hears everyone)" : "Team Only");
+    } else if (choice == 10) {
+        cmd_ai_chat_bg_toggle(id);
+    } else if (choice == 8) {
+        g_roundsPlayed = 0;
+        server_cmd("sv_restart 1");
+        ai_chat_print(0, id, "^4[Match Setup] ^1Match restarted!");
+        return PLUGIN_HANDLED;
+    } else if (choice == 9) {
+        new target_map[32];
+        copy(target_map, charsmax(target_map), g_mpMaps[g_selectedMenuMapIdx]);
+        if (is_map_valid(target_map)) {
+            ai_chat_print(0, id, "^4[Match Setup] ^1Changing map to ^4%s^1...", target_map);
+            server_cmd("changelevel %s", target_map);
+        } else {
+            ai_chat_print(id, print_team_default, "^4[Match Setup] ^1Map ^4%s ^1is not installed on server.", target_map);
+        }
+        return PLUGIN_HANDLED;
+    }
+
+    open_match_setup_menu(id);
+    return PLUGIN_HANDLED;
+}
+
+// =========================================================================
+// MP05: TEAM BALANCE FOR 10+ PLAYERS & SPECTATOR SUPPORT
+// =========================================================================
+
+stock move_player_to_spec(id) {
+    if (id <= 0 || !is_user_connected(id)) return;
+    new name[MAX_NAME_LENGTH];
+    get_user_name(id, name, charsmax(name));
+    server_cmd("allow_spectators 1");
+    client_cmd(id, "jointeam 6");
+    ai_chat_print(0, id, "^4[Teams] ^3%s ^1moved to ^4Spectators ^1(type ^4/join ^1to re-enter).", name);
+}
+
+stock move_player_to_active_team(id) {
+    if (id <= 0 || !is_user_connected(id)) return;
+    client_cmd(id, "jointeam 5; wait; wait; menuselect 5");
+    ai_chat_print(id, print_team_default, "^4[Teams] ^1Auto-joining active team...");
+}
+
+stock check_auto_balance_humans() {
+    new t_count = 0, ct_count = 0;
+    for (new i = 1; i <= get_maxplayers(); i++) {
+        if (is_user_connected(i) && !is_user_bot(i)) {
+            new t = get_player_team_num(i);
+            if (t == 1) t_count++;
+            else if (t == 2) ct_count++;
+        }
+    }
+    if ((t_count + ct_count) >= 4 && abs(t_count - ct_count) >= 2) {
+        balance_human_teams_now(0);
+    }
+}
+
+stock balance_human_teams_now(caller_id) {
+    server_cmd("mp_autoteambalance 1; mp_limitteams 1; allow_spectators 1");
+
+    new t_ids[MAX_PLAYERS], ct_ids[MAX_PLAYERS];
+    new t_count = 0, ct_count = 0;
+
+    for (new i = 1; i <= get_maxplayers(); i++) {
+        if (is_user_connected(i) && !is_user_bot(i)) {
+            new t = get_player_team_num(i);
+            if (t == 1) t_ids[t_count++] = i;
+            else if (t == 2) ct_ids[ct_count++] = i;
+        }
+    }
+
+    new moved = 0;
+    while (t_count - ct_count >= 2 && t_count > 0) {
+        new pid = t_ids[--t_count];
+        client_cmd(pid, "jointeam 2; wait; wait; menuselect 5");
+        ct_count++;
+        moved++;
+    }
+    while (ct_count - t_count >= 2 && ct_count > 0) {
+        new pid = ct_ids[--ct_count];
+        client_cmd(pid, "jointeam 1; wait; wait; menuselect 5");
+        t_count++;
+        moved++;
+    }
+
+    if (moved > 0) {
+        ai_chat_print(0, print_team_default, "^4[Team Balance] ^1Balanced human squads (^3%d T ^1vs ^3%d CT^1, moved ^4%d^1).", t_count, ct_count, moved);
+    } else if (caller_id > 0 && is_user_connected(caller_id)) {
+        ai_chat_print(caller_id, print_team_default, "^4[Team Balance] ^1Teams are already balanced (^3%d T ^1vs ^3%d CT^1).", t_count, ct_count);
+    }
+}
+
+public cmd_ai_balance(id) {
+    if (!is_match_admin(id)) {
+        ai_chat_print(id, print_team_default, "^4[Admin] ^1Only the Match Host can force team balance.");
+        return PLUGIN_HANDLED;
+    }
+    balance_human_teams_now(id);
+    return PLUGIN_HANDLED;
+}
+
+// =========================================================================
+// MP08: ADMIN COMMANDS & INTERACTIVE ADMIN MENU (kick, ban, restart, map, pause)
+// =========================================================================
+
+public cmd_ai_admin_menu(id) {
+    if (id <= 0 || !is_user_connected(id)) return PLUGIN_HANDLED;
+    if (!is_match_admin(id)) {
+        ai_chat_print(id, print_team_default, "^4[Admin] ^1Only the Match Host can open ^4!admin^1.");
+        return PLUGIN_HANDLED;
+    }
+
+    new menu = menu_create("\y[Host] Admin Controls:", "admin_menu_handler");
+    menu_additem(menu, "\wOpen Match Setup (\y!match\w)", "1");
+    menu_additem(menu, "\wRestart Round (\ysv_restart 1\w)", "2");
+    menu_additem(menu, "\wBalance Human Teams (\y10+ Players\w)", "3");
+    menu_additem(menu, "\wStart Map Vote (\y!votemap\w)", "4");
+    menu_additem(menu, g_serverPaused ? "\rUnpause Match" : "\wPause Match", "5");
+    menu_additem(menu, "\wKick a Player...", "6");
+    menu_setprop(menu, MPROP_EXIT, MEXIT_ALL);
+    menu_display(id, menu, 0);
+    return PLUGIN_HANDLED;
+}
+
+public admin_menu_handler(id, menu, item) {
+    if (item == MENU_EXIT || !is_user_connected(id)) {
+        menu_destroy(menu);
+        return PLUGIN_HANDLED;
+    }
+    new info[8], name_buf[64], access, callback;
+    menu_item_getinfo(menu, item, access, info, charsmax(info), name_buf, charsmax(name_buf), callback);
+    menu_destroy(menu);
+
+    if (!is_match_admin(id)) return PLUGIN_HANDLED;
+    new act = str_to_num(info);
+
+    if (act == 1) open_match_setup_menu(id);
+    else if (act == 2) cmd_ai_restart(id);
+    else if (act == 3) cmd_ai_balance(id);
+    else if (act == 4) start_map_vote_now(id);
+    else if (act == 5) cmd_ai_pause(id);
+    else if (act == 6) open_kick_submenu(id);
+    return PLUGIN_HANDLED;
+}
+
+stock open_kick_submenu(id) {
+    new menu = menu_create("\y[Host] Select Player to Kick:", "kick_submenu_handler");
+    new added = 0;
+    for (new i = 1; i <= get_maxplayers(); i++) {
+        if (is_user_connected(i) && i != id && !is_user_bot(i)) {
+            new pname[MAX_NAME_LENGTH], uid_str[16];
+            get_user_name(i, pname, charsmax(pname));
+            formatex(uid_str, charsmax(uid_str), "%d", get_user_userid(i));
+            menu_additem(menu, pname, uid_str);
+            added++;
+        }
+    }
+    if (added == 0) {
+        menu_destroy(menu);
+        ai_chat_print(id, print_team_default, "^4[Admin] ^1No other human players connected to kick.");
+        return;
+    }
+    menu_setprop(menu, MPROP_EXIT, MEXIT_ALL);
+    menu_display(id, menu, 0);
+}
+
+public kick_submenu_handler(id, menu, item) {
+    if (item == MENU_EXIT || !is_user_connected(id)) {
+        menu_destroy(menu);
+        return PLUGIN_HANDLED;
+    }
+    new uid_str[16], pname[MAX_NAME_LENGTH], access, callback;
+    menu_item_getinfo(menu, item, access, uid_str, charsmax(uid_str), pname, charsmax(pname), callback);
+    menu_destroy(menu);
+
+    if (!is_match_admin(id)) return PLUGIN_HANDLED;
+    server_cmd("kick #%s ^"Kicked by Match Host^"", uid_str);
+    ai_chat_print(0, id, "^4[Admin] ^1Host kicked ^3%s^1.", pname);
+    return PLUGIN_HANDLED;
+}
+
+public cmd_ai_kick(id) {
+    if (!is_match_admin(id)) {
+        console_print(id, "[Admin] Access denied.");
+        return PLUGIN_HANDLED;
+    }
+    new target_arg[32];
+    read_argv(1, target_arg, charsmax(target_arg));
+    if (!target_arg[0]) {
+        console_print(id, "[Admin] Usage: ai_kick <name or #userid>");
+        return PLUGIN_HANDLED;
+    }
+    new tid = cmd_target(id, target_arg, CMDTARGET_ALLOW_SELF);
+    if (!tid) return PLUGIN_HANDLED;
+    new tname[MAX_NAME_LENGTH];
+    get_user_name(tid, tname, charsmax(tname));
+    server_cmd("kick #%d ^"Kicked by Match Host^"", get_user_userid(tid));
+    notify_player_and_chat(id, "^4[Admin] ^1Kicked ^3%s^1.", tname);
+    return PLUGIN_HANDLED;
+}
+
+public cmd_ai_ban(id) {
+    if (!is_match_admin(id)) {
+        console_print(id, "[Admin] Access denied.");
+        return PLUGIN_HANDLED;
+    }
+    new target_arg[32], mins_arg[16];
+    read_argv(1, target_arg, charsmax(target_arg));
+    read_argv(2, mins_arg, charsmax(mins_arg));
+    if (!target_arg[0]) {
+        console_print(id, "[Admin] Usage: ai_ban <name> [minutes, default 30]");
+        return PLUGIN_HANDLED;
+    }
+    new mins = mins_arg[0] ? str_to_num(mins_arg) : 30;
+    new tid = cmd_target(id, target_arg, CMDTARGET_ALLOW_SELF);
+    if (!tid) return PLUGIN_HANDLED;
+
+    new tname[MAX_NAME_LENGTH], tip[32];
+    get_user_name(tid, tname, charsmax(tname));
+    get_user_ip(tid, tip, charsmax(tip), 1);
+    server_cmd("addip %d %s; writeip; kick #%d ^"Banned (%d min)^"", mins, tip, get_user_userid(tid), mins);
+    notify_player_and_chat(id, "^4[Admin] ^1Banned ^3%s ^1(%s) for ^4%d ^1minutes.", tname, tip, mins);
+    return PLUGIN_HANDLED;
+}
+
+public cmd_ai_restart(id) {
+    if (!is_match_admin(id)) {
+        ai_chat_print(id, print_team_default, "^4[Admin] ^1Only the Match Host can restart the round.");
+        return PLUGIN_HANDLED;
+    }
+    g_roundsPlayed = 0;
+    server_cmd("sv_restart 1");
+    notify_player_and_chat(id, "^4[Admin] ^1Match restarted (^4sv_restart 1^1)!");
+    return PLUGIN_HANDLED;
+}
+
+public cmd_ai_map(id) {
+    if (!is_match_admin(id)) {
+        ai_chat_print(id, print_team_default, "^4[Admin] ^1Only the Match Host can change maps directly (try ^4!votemap^1).");
+        return PLUGIN_HANDLED;
+    }
+    new map_arg[32];
+    read_argv(1, map_arg, charsmax(map_arg));
+    if (!map_arg[0]) {
+        console_print(id, "[Admin] Usage: ai_map <mapname> (e.g. de_dust2_cz, de_inferno_cz, de_aztec_cz)");
+        return PLUGIN_HANDLED;
+    }
+    if (!is_map_valid(map_arg)) {
+        notify_player_and_chat(id, "^4[Admin] ^1Map ^4%s ^1was not found in czero/maps/.", map_arg);
+        return PLUGIN_HANDLED;
+    }
+    notify_player_and_chat(id, "^4[Admin] ^1Changing map to ^4%s^1...", map_arg);
+    server_cmd("changelevel %s", map_arg);
+    return PLUGIN_HANDLED;
+}
+
+public cmd_ai_pause(id) {
+    if (!is_match_admin(id)) {
+        ai_chat_print(id, print_team_default, "^4[Admin] ^1Only the Match Host can pause/unpause the match.");
+        return PLUGIN_HANDLED;
+    }
+    g_serverPaused = !g_serverPaused;
+    server_cmd("pausable 1");
+    if (id > 0 && is_user_connected(id)) {
+        client_cmd(id, "pause");
+    } else {
+        server_cmd("pause");
+    }
+    notify_player_and_chat(id, "^4[Admin] ^1Match ^4%s ^1by Host.", g_serverPaused ? "PAUSED" : "RESUMED");
+    return PLUGIN_HANDLED;
+}
+
+// =========================================================================
+// MP09: MULTIPLAYER MAP VOTE (!votemap & Automatic End-of-Match Vote)
+// =========================================================================
+
+public cmd_ai_votemap(id) {
+    if (g_voteInProgress) {
+        if (id > 0 && is_user_connected(id)) {
+            ai_chat_print(id, print_team_default, "^4[Map Vote] ^1A map vote is already in progress!");
+        }
+        return PLUGIN_HANDLED;
+    }
+    new Float:now = get_gametime();
+    if (!is_match_admin(id) && g_lastVoteTime > 0.0 && (now - g_lastVoteTime) < 90.0) {
+        ai_chat_print(id, print_team_default, "^4[Map Vote] ^1Please wait ^4%d^1s before starting another map vote.", floatround(90.0 - (now - g_lastVoteTime)));
+        return PLUGIN_HANDLED;
+    }
+    start_map_vote_now(id);
+    return PLUGIN_HANDLED;
+}
+
+public start_map_vote_task() {
+    start_map_vote_now(0);
+}
+
+stock start_map_vote_now(starter_id) {
+    if (g_voteInProgress) return;
+    g_voteInProgress = true;
+    g_lastVoteTime = get_gametime();
+
+    for (new i = 0; i < MAX_MP_MAPS; i++) g_mapVotes[i] = 0;
+    for (new p = 0; p <= MAX_PLAYERS; p++) g_hasVoted[p] = false;
+
+    new starter_name[MAX_NAME_LENGTH] = "End of Match";
+    if (starter_id > 0 && is_user_connected(starter_id)) {
+        get_user_name(starter_id, starter_name, charsmax(starter_name));
+    }
+    ai_chat_print(0, print_team_default, "^4[Map Vote] ^1Vote for the next map started (^3%s^1)! Select a map within ^415s^1.", starter_name);
+
+    for (new id = 1; id <= get_maxplayers(); id++) {
+        if (is_user_connected(id) && !is_user_bot(id)) {
+            show_map_vote_menu_to_player(id);
+        }
+    }
+
+    remove_task(5401);
+    set_task(15.0, "finish_map_vote_task", 5401);
+}
+
+stock show_map_vote_menu_to_player(id) {
+    new menu = menu_create("\y[Map Vote] Choose Next Map (15s):", "map_vote_menu_handler");
+    for (new i = 0; i < MAX_MP_MAPS; i++) {
+        if (is_map_valid(g_mpMaps[i])) {
+            new idx_str[8];
+            num_to_str(i, idx_str, charsmax(idx_str));
+            menu_additem(menu, g_mpMaps[i], idx_str);
+        }
+    }
+    menu_setprop(menu, MPROP_EXIT, MEXIT_ALL);
+    menu_display(id, menu, 0);
+}
+
+public map_vote_menu_handler(id, menu, item) {
+    if (item == MENU_EXIT || !is_user_connected(id) || !g_voteInProgress || g_hasVoted[id]) {
+        menu_destroy(menu);
+        return PLUGIN_HANDLED;
+    }
+    new idx_str[8], map_label[32], access, callback;
+    menu_item_getinfo(menu, item, access, idx_str, charsmax(idx_str), map_label, charsmax(map_label), callback);
+    menu_destroy(menu);
+
+    new m_idx = str_to_num(idx_str);
+    if (m_idx >= 0 && m_idx < MAX_MP_MAPS) {
+        g_mapVotes[m_idx]++;
+        g_hasVoted[id] = true;
+        new voter[MAX_NAME_LENGTH];
+        get_user_name(id, voter, charsmax(voter));
+        ai_chat_print(0, id, "^4[Map Vote] ^3%s ^1voted for ^4%s ^1(^3%d^1 votes).", voter, g_mpMaps[m_idx], g_mapVotes[m_idx]);
+    }
+    return PLUGIN_HANDLED;
+}
+
+public finish_map_vote_task() {
+    g_voteInProgress = false;
+    new best_idx = -1;
+    new best_votes = 0;
+
+    for (new i = 0; i < MAX_MP_MAPS; i++) {
+        if (g_mapVotes[i] > best_votes) {
+            best_votes = g_mapVotes[i];
+            best_idx = i;
+        }
+    }
+
+    if (best_idx == -1 || best_votes == 0) {
+        ai_chat_print(0, print_team_default, "^4[Map Vote] ^1No votes cast — staying on current map.");
+        return;
+    }
+
+    copy(g_nextWinningMap, charsmax(g_nextWinningMap), g_mpMaps[best_idx]);
+    ai_chat_print(0, print_team_default, "^4[Map Vote] ^1Winning Map: ^4%s ^1with ^3%d ^1vote(s)! Changing map in 4 seconds...", g_nextWinningMap, best_votes);
+    set_task(4.0, "apply_winning_map_task", 5402);
+}
+
+public apply_winning_map_task() {
+    if (g_nextWinningMap[0] != EOS && is_map_valid(g_nextWinningMap)) {
+        server_cmd("changelevel %s", g_nextWinningMap);
+    }
+}
+
+// =========================================================================
+// MP11: BUILT-IN VOICE CHAT SETUP HELPER & MIC LOOPBACK TEST
+// =========================================================================
+
+stock show_voice_help(id) {
+    if (id <= 0 || !is_user_connected(id)) return;
+    ai_chat_print(id, print_team_default, "^4[Voice Help] ^1Hold ^4K ^1to speak to real friends in-game (^4sv_voiceenable 1^1).");
+    ai_chat_print(id, print_team_default, "^4[Voice Help] ^1Type ^4!mictest ^1to hear your own mic for 8s | Console volume: ^4voice_scale 1.0^1.");
+}
+
+public cmd_ai_voice_test(id) {
+    if (id <= 0 || !is_user_connected(id)) {
+        console_print(id, "[Voice] Run ai_voice_test or !mictest from inside the game.");
+        return PLUGIN_HANDLED;
+    }
+    client_cmd(id, "voice_enable 1; voice_modenable 1; voice_forcemicrecord 1; voice_loopback 1");
+    ai_chat_print(id, print_team_default, "^4[Voice Test] ^1Mic loopback ^4ON ^1for 8 seconds! Hold ^4K ^1and speak now to hear yourself...");
+    remove_task(5300 + id);
+    set_task(8.0, "stop_voice_test_task", 5300 + id);
+    return PLUGIN_HANDLED;
+}
+
+public stop_voice_test_task(taskid) {
+    new id = taskid - 5300;
+    if (id > 0 && id <= MAX_PLAYERS && is_user_connected(id)) {
+        client_cmd(id, "voice_loopback 0");
+        ai_chat_print(id, print_team_default, "^4[Voice Test] ^1Mic loopback ^4OFF^1. Your mic is live for teammates!");
+    }
+}
+
+// =========================================================================
+// MP15: LIVE VPN PING & PACKET LOSS CHECK (!ping / ai_ping)
+// =========================================================================
+
+public cmd_ai_ping(id) {
+    new summary[192] = "";
+    new human_total = 0;
+
+    console_print(id, "================ MULTIPLAYER VPN PING STATUS ================");
+    for (new i = 1; i <= get_maxplayers(); i++) {
+        if (is_user_connected(i) && !is_user_bot(i)) {
+            human_total++;
+            new pname[MAX_NAME_LENGTH], ping = 0, loss = 0;
+            get_user_name(i, pname, charsmax(pname));
+            get_user_ping(i, ping, loss);
+            console_print(id, "  %-22s | Ping: %3d ms | Loss: %2d%%", pname, ping, loss);
+
+            new entry[48];
+            formatex(entry, charsmax(entry), "%s%s: ^4%dms^1", summary[0] ? " | " : "", pname, ping);
+            if (strlen(summary) + strlen(entry) < 150) {
+                add(summary, charsmax(summary), entry);
+            }
+        }
+    }
+    console_print(id, "=============================================================");
+
+    if (human_total == 0) {
+        console_print(id, "  No human players currently connected.");
+    } else if (id > 0 && is_user_connected(id)) {
+        ai_chat_print(id, print_team_default, "^4[VPN Ping] ^1(%d online) %s", human_total, summary);
+    } else {
+        ai_chat_print(0, print_team_default, "^4[VPN Ping] ^1(%d online) %s", human_total, summary);
+    }
     return PLUGIN_HANDLED;
 }

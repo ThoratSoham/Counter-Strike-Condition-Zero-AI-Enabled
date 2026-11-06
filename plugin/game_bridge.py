@@ -98,6 +98,8 @@ class GameBridge:
                     or text.startswith("GOODBYE")
                     or text.startswith("EVENT|")
                     or text.startswith("TEST_SOUND|")
+                    or text.startswith("ROSTER|")
+                    or text.startswith("SET_STYLE|")
                     or text in ["FORCE_FIGHT", "FORCE_CHAT", "RESET", "GET_STATUS", "SOUND_LIST"]
                 ):
                     self._parse_amx_packet(text, addr)
@@ -156,6 +158,28 @@ class GameBridge:
                 self.event_handler("reset", {})
             return
 
+        if cmd == "ROSTER":
+            try:
+                h_count = int(parts[1]) if len(parts) > 1 and parts[1].strip() else 0
+            except ValueError:
+                h_count = 0
+            names_csv = parts[2] if len(parts) > 2 else ""
+            map_name = parts[3] if len(parts) > 3 else ""
+            humans = [n.strip() for n in names_csv.split(",") if n.strip()]
+            if self.event_handler:
+                self.event_handler("roster", {
+                    "human_count": max(h_count, len(humans)),
+                    "humans": humans,
+                    "map": map_name,
+                })
+            return
+
+        if cmd == "SET_STYLE":
+            style = parts[1].strip().lower() if len(parts) > 1 else "full_gamer"
+            if self.event_handler:
+                self.event_handler("set_style", {"style": style})
+            return
+
         if cmd == "TEST_SOUND":
             tag = parts[1] if len(parts) > 1 else "hype"
             requester = parts[2] if len(parts) > 2 else ""
@@ -188,6 +212,8 @@ class GameBridge:
                 victim = parts[3] if len(parts) > 3 else ""
                 weapon = parts[4] if len(parts) > 4 else ""
                 headshot = parts[5] == "1" if len(parts) > 5 else False
+                killer_human = parts[6] == "1" if len(parts) > 6 else False
+                victim_human = parts[7] == "1" if len(parts) > 7 else False
 
                 self.logger.log(3, f"Brain service received event: kill by '{killer}' on '{victim}' with '{weapon}' (hs:{headshot})")
                 if self.event_handler:
@@ -195,7 +221,9 @@ class GameBridge:
                         "attacker": killer,
                         "victim": victim,
                         "weapon": weapon,
-                        "headshot": headshot
+                        "headshot": headshot,
+                        "killer_human": killer_human,
+                        "victim_human": victim_human,
                     })
             elif evt_type == "round_end":
                 won = parts[2] == "1" if len(parts) > 2 else True

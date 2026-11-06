@@ -1,0 +1,123 @@
+{
+  "map_name": "de_raid",
+  "display_name": "Raid (Hillside Mansion)",
+  "game_mode": "bomb_defusal",
+  "theme": "Modern hillside luxury mansion with garage, central courtyard, and pool deck",
+  "callouts": [
+    {
+      "id": "driveway",
+      "name": "Driveway",
+      "aliases": ["t spawn", "roundabout", "entry"],
+      "lane": "north_spawn",
+      "bounds": { "min": [-1408, 1280, -32], "max": [1408, 1984, 256] },
+      "description": "Terrorist spawn paved roundabout feeding Garage (West), Courtyard (Mid), and Garden (East)."
+    },
+    {
+      "id": "court",
+      "name": "Court",
+      "aliases": ["ct spawn", "basketball", "hoop", "back patio"],
+      "lane": "south_spawn",
+      "bounds": { "min": [-1408, -1984, -32], "max": [1408, -1280, 256] },
+      "description": "Counter-Terrorist spawn basketball half-court with decorative hoop leading to Kitchen, Mid, and Pool Deck."
+    },
+    {
+      "id": "garage",
+      "name": "Garage",
+      "aliases": ["b site", "bombsite b", "cars", "car bay"],
+      "lane": "west",
+      "is_bombsite": "B",
+      "bounds": { "min": [-1664, -128, -32], "max": [-768, 1024, 256] },
+      "description": "Bombsite B enclosed luxury car bay with two brush-built sports sedans for plant/defuse cover."
+    },
+    {
+      "id": "laundry",
+      "name": "Laundry",
+      "aliases": ["utility", "b short", "side hall"],
+      "lane": "west",
+      "bounds": { "min": [-1664, -1152, -32], "max": [-960, -128, 224] },
+      "description": "West utility connector linking CT Court to Kitchen and Garage Bombsite B."
+    },
+    {
+      "id": "kitchen",
+      "name": "Kitchen",
+      "aliases": ["stove", "west choke"],
+      "lane": "west_mid",
+      "bounds": { "min": [-960, -896, -32], "max": [-384, -128, 224] },
+      "description": "Key west-side indoor chokepoint connecting Laundry/Garage to Mansion Lounge."
+    },
+    {
+      "id": "mansion",
+      "name": "Mansion",
+      "aliases": ["lounge", "living room", "art hall", "house"],
+      "lane": "mid_west",
+      "bounds": { "min": [-896, -128, -32], "max": [-256, 896, 256] },
+      "description": "Main modern mansion interior lounge overlooking Central Courtyard and linking to Garage."
+    },
+    {
+      "id": "vault",
+      "name": "Vault",
+      "aliases": ["office", "security"],
+      "lane": "mid_west",
+      "bounds": { "min": [-896, 640, -32], "max": [-320, 1216, 224] },
+      "description": "North mansion security office connecting T Driveway into Mansion Lounge and Garage."
+    },
+    {
+      "id": "balcony",
+      "name": "Balcony",
+      "aliases": ["upper", "bedroom", "overlook"],
+      "lane": "mid",
+      "bounds": { "min": [-512, -384, 96], "max": [-128, 512, 288] },
+      "description": "Elevated mansion walkway with wide stairs overlooking Central Courtyard (Ring)."
+    },
+    {
+      "id": "ring",
+      "name": "Courtyard",
+      "aliases": ["mid", "ring", "statue", "lion"],
+      "lane": "mid",
+      "bounds": { "min": [-256, -640, -32], "max": [512, 640, 288] },
+      "description": "Open central courtyard framed by four pillars and a centerpiece statue pedestal."
+    },
+    {
+      "id": "cutout",
+      "name": "Cutout",
+      "aliases": ["mid connector", "pool window", "east choke"],
+      "lane": "mid_east",
+      "bounds": { "min": [512, -320, -32], "max": [896, 320, 224] },
+      "description": "Central-to-East breach corridor connecting Courtyard (Ring) directly onto Pool Deck."
+    },
+    {
+      "id": "garden",
+      "name": "Garden",
+      "aliases": ["tiki", "north patio", "a long"],
+      "lane": "east",
+      "bounds": { "min": [640, 640, -32], "max": [1664, 1280, 256] },
+      "description": "Terrorist East approach path with planters leading from Driveway toward Pool and Bombsite A."
+    },
+    {
+      "id": "pool",
+      "name": "Pool",
+      "aliases": ["swimming pool", "water", "sun deck"],
+      "lane": "east",
+      "bounds": { "min": [896, -256, -96], "max": [1664, 640, 256] },
+      "description": "Shallow sunlit swimming pool and patio deck with wide steps on East lane."
+    },
+    {
+      "id": "gazebo",
+      "name": "Gazebo",
+      "aliases": ["a site", "bombsite a", "pool deck", "jacuzzi"],
+      "lane": "east",
+      "is_bombsite": "A",
+      "bounds": { "min": [896, -1152, -32], "max": [1664, -256, 256] },
+      "description": "Bombsite A covered poolside gazebo and jacuzzi terrace between Pool and CT Court."
+    },
+    {
+      "id": "patio_steps",
+      "name": "Patio Steps",
+      "aliases": ["ct mid", "south arch"],
+      "lane": "mid",
+      "bounds": { "min": [-384, -1280, -32], "max": [512, -640, 256] },
+      "description": "Wide southern archway and steps linking CT Basketball Court into Central Courtyard."
+    }
+  ]
+}
+

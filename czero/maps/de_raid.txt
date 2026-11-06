@@ -1,0 +1,15 @@
+Raid - Hillside Mansion (Bomb Defusal)
+
+Clean-room GoldSrc build for Counter-Strike: Condition Zero.
+Credits: Layout inspired by the CoD4 custom map mp_bo2raid3 by Hugo,
+which is a remake of Black Ops 2 Raid.
+All GoldSrc brushwork and 8-bit WAD textures created from scratch.
+
+Counter-Terrorists: Defend the Hillside Mansion's Poolside Gazebo
+(Bombsite A) and Luxury Multi-Car Garage (Bombsite B) from demolition.
+Defuse any planted C4 charges.
+
+Terrorists: Breach through the Garage, Mansion Courtyard (Ring), or
+Poolside Garden and detonate C4 at either Bombsite A or Bombsite B.
+
+Other Notes: There are 2 bomb targets in this mission (Gazebo A, Garage B).

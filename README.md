@@ -88,6 +88,22 @@ To configure your own optional Gemini / OpenRouter API key, copy `config.example
 
 ---
 
+## 🌐 Multiplayer Mode: Play with 10+ Real Friends Over Free VPN
+
+Play together with **10 to 32 human friends** over **Tailscale** or **ZeroTier** with **zero router port forwarding**, built-in voice chat (`K`), and shared AI Bot Teammates (**only the Host runs the AI Brain** — joining friends need zero API keys!).
+
+1. **One-Time Setup (Host & Friends)**: Double-click **`install.bat`**
+2. **Host a Match**: Double-click **`host.bat`** (starts the server + AI Brain, detects your VPN IP, and prints `connect <vpn_ip>:27015` to share with friends; supports `--dedicated` for `hlds.exe` 24–32 slot hosting).
+3. **Join a Friend's Match**: Double-click **`join.bat`**, enter the Host's VPN IP (remembered automatically next time), check your live ping, and jump straight into the match!
+4. **Check VPN & Server Ping**: Run `py check_vpn.py <host_vpn_ip>` or type `!ping` in-game.
+5. **In-Game Multiplayer Controls**:
+   - **Host Menus**: `!match` (Map, Max Rounds, Friendly Fire, Bot Mode `Off`/`Fill`/`Always N`, Chat Style `Clean`/`Banter`/`Full gamer`, AllTalk) & `!admin` (Kick, Ban, Pause, Restart, Balance Teams).
+   - **Everyone**: Hold **`K`** for built-in voice chat (`!mictest` to test your mic), `!votemap` for map voting, `/spec` & `/join` for spectator switching, and `!sounds` for the meme soundboard.
+
+See [**docs/MULTIPLAYER.md**](docs/MULTIPLAYER.md) for the complete multiplayer & VPN setup guide.
+
+---
+
 ## 🎮 In-Game Console & Chat Commands
 
 ### Console Commands (`~`)
@@ -146,6 +162,22 @@ cd czero\addons\amxmodx\scripting
 ├── main.py                 # Main AI Brain entry point
 └── play_czero.bat          # One-click game + Brain launcher
 ```
+
+---
+
+## 🧟 Monster Hunt Horror Gamemode (Experimental Branch)
+
+This branch contains the **Monster Hunt Horror Mode** (`monster_hunt.amxx`), featuring an intelligent Half-Life Zombie boss, adaptive A* tracking, difficulty presets, signature abilities, horror atmosphere, and cooperative bot teammate AI.
+
+See [`MONSTER_HUNT_README.md`](MONSTER_HUNT_README.md) for full documentation, cvars, and known limitations.
+
+### Current Limitations & Known Issues:
+- **Optimization**: The AI state machine, dynamic A* pathfinding, and multi-bot tracing run in Pawn; performance is unoptimized on lower-end systems.
+- **Monster Skin / Textures**: In certain GoldSrc renderers or client setups, the monster model's textures may fail to load properly, appearing as a plain white and grey monster.
+- **Persistent Ambience**: Horror background audio and heartbeat soundscapes may continue playing without cleanly terminating after the round ends.
+- **Auto-Start On Match Launch**: The match directly starts with the monster mod turned on by default.
+- **Menu Clutter**: The `/horror` in-game control menu contains numerous tuning options and sub-menus.
+- **Movement Stutter**: The monster moves via server-side waypoint vectors (`MOVETYPE_STEP`), which can appear laggy or stuttery in-game.
 
 ---
 

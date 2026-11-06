@@ -1,3 +1,4 @@
+de_raid
 de_dust_cz
 cs_italy_cz
 cs_militia_cz

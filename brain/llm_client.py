@@ -5,6 +5,7 @@ import re
 import time
 from brain.logger import get_logger
 from brain.safety_filter import is_safe_line
+from brain.map_callouts import build_llm_callout_section
 
 KNOWN_TAGS = [
     "hype", "kill_headshot", "shock", "praise", "roast",
@@ -73,7 +74,7 @@ class LLMClient:
     def is_online(self) -> bool:
         return bool(self.google_api_key)
 
-    def _build_batch_system_prompt(self, game_context: dict, mood_dict: dict, recent_chat: list, active_fight: dict = None) -> str:
+    def _build_batch_system_prompt(self, game_context: dict, mood_dict: dict, recent_chat: list, active_fight: dict = None, batch_size: int = 10) -> str:
         style_desc = (
             "Authentic gamer banter between friends with light to moderate swearing (damn, shit, fuck, hell, bruh, clown). "
             "STRICT HARD LIMITS: Absolute zero tolerance for racial, religious, or identity slurs, hate speech, or real-world threats. "
@@ -88,8 +89,14 @@ class LLMClient:
         if active_fight and active_fight.get("active"):
             active_fight_str = f"Active fight between {active_fight.get('between', [])} at stage '{active_fight.get('stage', 'rising')}'"
 
+        humans = game_context.get("human_players") or []
+        humans_str = ", ".join(humans) if humans else "1 local player"
+        min_lines = max(8, batch_size - 2)
+        max_lines = max(12, batch_size + 2)
+        callout_block = build_llm_callout_section(game_context.get("map", "de_dust2"))
+
         prompt = f"""You are the AI scriptwriter for 4 bot teammates in Counter-Strike: Condition Zero (GoldSrc engine).
-The human player is the audience watching these 4 friends talk non-stop in team chat.
+Real human friends in this multiplayer lobby ({humans_str}) are playing alongside these 4 AI bots in team chat.
 
 THE 4 PERSONALITIES (Keep them distinct and consistent):
 - Vikram (The Hothead): Loud, aggressive, rages fast, blames everyone, CAPS when angry, entry fragger.
@@ -100,18 +107,19 @@ THE 4 PERSONALITIES (Keep them distinct and consistent):
 CURRENT MATCH CONTEXT:
 - Map: {game_context.get('map', 'de_dust2')}
 - Score/Round: Round {game_context.get('round', 1)}
+- Connected human friends: {humans_str}
 - Alive teammates: {', '.join(game_context.get('alive_teammates', ['Vikram', 'Kabir', 'Marcus', 'Sunny']))}
 - Last 5 events: {json.dumps(game_context.get('last_events', ['Round starting']))}
 - Recent chat (last 5 lines): {json.dumps(recent_chat[-5:] if recent_chat else [])}
 - Active fight state: {active_fight_str}
 - Moods: {json.dumps(mood_dict)}
 - Chat Style: {style_desc}
-
+{callout_block}
 VALID SOUND TAGS:
 {json.dumps(KNOWN_TAGS)}
 
 RULES FOR GENERATED LINES:
-1. Generate between 8 and 12 lines of dialogue between the bots.
+1. Generate between {min_lines} and {max_lines} lines of dialogue between the bots (occasionally teasing or hyping the connected human friends by name if listed).
 2. Group the lines into 2 to 3 multi-turn conversational exchanges (where bots TALK TO EACH OTHER, reply to each other, roast each other, or argue about weapons/tactics). NEVER output random disconnected single sentences!
 3. Each line must be 2 to 14 words. Authentic gamer slang, funny banter, small typos sometimes, NO long speeches.
 4. sound_tag MUST BE PRECISE AND CONTEXTUAL. Only attach a sound_tag when it fits the exact emotional punchline of the line (~1 in 3 lines):
@@ -157,7 +165,7 @@ RULES FOR GENERATED LINES:
         self.record_request()
         self.logger.log(4, f"AI API called: {self.model_name} via Google AI Studio (Tokens: est ~350, Batch: {batch_size})")
 
-        sys_prompt = self._build_batch_system_prompt(game_context, mood_dict, recent_chat, active_fight)
+        sys_prompt = self._build_batch_system_prompt(game_context, mood_dict, recent_chat, active_fight, batch_size=batch_size)
         user_prompt = f"Write the next batch of {batch_size} bot chat lines now in strict JSON format:"
 
         # Attempt call (with 1 retry on broken JSON or timeout)
@@ -278,26 +286,30 @@ RULES FOR GENERATED LINES:
         except Exception as e:
             return [], {}
 
-    def generate_single_reply(self, teammate: dict, user_message: str, game_context: dict, mood: dict) -> tuple[str, str, bool]:
-        """Single line reply for direct player questions or mic commands."""
+    def generate_single_reply(self, teammate: dict, user_message: str, game_context: dict, mood: dict, sender: str = "Player") -> tuple[str, str, bool]:
+        """Single line reply for direct player questions or mic commands (addresses the speaking friend in multiplayer)."""
         if not self.google_api_key:
             return "", "", False
 
         start_time = time.time()
         self.record_request()
-        self.logger.log(4, f"AI API called: {self.model_name} for direct player question")
+        self.logger.log(4, f"AI API called: {self.model_name} for direct player question from '{sender}'")
 
         name = teammate.get("name", "Vikram")
         archetype = teammate.get("archetype", "Player")
         bio = teammate.get("bio", "")
+        clean_note = "Keep language clean (no swearing)." if self.chat_style == "clean" else "Authentic gamer banter, zero slurs/hate."
+        callout_block = build_llm_callout_section(game_context.get("map", ""))
 
-        prompt = f"""You are {name} ({archetype}), playing Counter-Strike: Condition Zero with your friend.
+        prompt = f"""You are {name} ({archetype}), playing Counter-Strike: Condition Zero in a squad lobby with friends.
 Bio: {bio}
-User says: "{user_message}"
+Current Map: {game_context.get('map', 'de_dust2')}{callout_block}
+Friend '{sender}' says: "{user_message}"
 Rules:
-1. 2 to 12 words only. Real gamer slang.
-2. Choose one optional sound tag from: {json.dumps(KNOWN_TAGS)}
-3. Output strict JSON: {{"text": "...", "sound_tag": "..."}}
+1. 2 to 12 words only. Real gamer slang. {clean_note}
+2. Address '{sender}' naturally if helpful.
+3. Choose one optional sound tag from: {json.dumps(KNOWN_TAGS)}
+4. Output strict JSON: {{"text": "...", "sound_tag": "..."}}
 """
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={self.google_api_key}"

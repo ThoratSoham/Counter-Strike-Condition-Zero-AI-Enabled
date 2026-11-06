@@ -7,12 +7,18 @@ __pycache__/
 venv/
 env/
 
-# Mod Config & Secrets
+# Mod Config & Secrets (MP10: RCON and server passwords never in repo)
 config.json
+czero/multiplayer_secret.cfg
+.last_host.txt
 *.key
 
-# Large Installer Archive (>100MB GitHub limit) & Crash Dumps
+# Large Installer Archive (>100MB GitHub limit), Reference Archives, Tools & Crash Dumps
 Condition_Zero.exe
+map/
+tools/
+*.iwd
+*.ff
 *.mdmp
 
 # Runtime Logs & Temporary Files
@@ -23,7 +29,25 @@ czero/addons/amxmodx/logs/*.log
 brain/memory.json
 stt_temp.wav
 
-# OS files
+# OS & Backup files
 Thumbs.db
 Desktop.ini
 .DS_Store
+*.bak
+backup*/
+czero/addons/amxmodx/backup*/
+czero_backup/
+czero_newMap/
+TrenchBoom/
+.cloud-attachments/
+qconsole.log
+*.lnk
+scratch_*.md
+test_assign.*
+audit_precaches.py
+check_all_extents.py
+check_extents_engine.py
+check_offset.py
+check_vpn.py
+find_bad_extents.py
+parse_zombie_mdl.py
