@@ -227,40 +227,78 @@ Accessible via chat `/horror` or console `mh_menu`:
 | `mh_blood_color` | `0` | `0` = Visceral Red, `1` = Alien Yellow/Green. |
 | `mh_atmosphere` | `1` | `1` enables Dark Midnight lighting ("b"); `0` daylight ("m"). |
 | `mh_heartbeat` | `1` | `1` enables proximity heartbeat audio; `0` disables. |
-| `mh_debug` | `0` | `1` draws laser beams for A* paths, bot states, and prints telemetry. |
+| `mh_trace_budget` | `30` | Maximum trace lines per second allocated to AI visibility checks before throttling. |
+| `mh_tint` | `0` | Optional subtle horror glow tint (`1` enables subtle crimson shell, `0` is natural Valve textures). |
+| `mh_debug` | `0` | `1` draws laser beams for A* paths, bot states, and displays real-time HUD telemetry. |
 
 ---
 
-## 9. Verification & Testing Checklist
+## 9. Recommended Server Framerate Settings
 
-- [x] **Zero Warning Compilation**: Source compiles cleanly with `amxxpc.exe` with 0 errors and 0 warnings.
-- [x] **Difficulty Presets**: Switching between Easy (3000 HP), Normal (6000 HP), Nightmare (12000 HP), and Custom scales monster stats accurately.
-- [x] **Team of Bots Longevity**: On Normal (6000 HP) and Nightmare (12000 HP) with 20% distance damage reduction, a team of bots cannot melt the monster in under 2 minutes.
-- [x] **Adaptive Tracking & Flanking**: Heat map decays naturally, campers are detected, fleeing target routes are predicted, and the monster routes through flanks when survivors cluster.
-- [x] **Kill Abilities**:
-  - Combo melee delivers 3 successive swings with heavy knockback on the 3rd.
-  - Apex Lunge leaps across 350–800u after telegraph roar, with a 1.0s stagger recovery opening.
-  - Ground Stomp spawns a shockwave ring, shakes screens, and slows caught survivors for 2.0s.
-  - Acid Spit hurls a ballistic projectile that detonates on contact when targets camp out of reach.
-  - Jumpscare triggers from behind with a 0.4s freeze, sting sound, and view snap (with flash-safe option).
-- [x] **UI & HUD**: Boss health bar displays phase status, danger meter shows distance and direction (`BEHIND YOU!`, `TO YOUR LEFT`, etc.), settings menu saves changes to disk, and round summaries report top killers and damage dealers.
-- [x] **Vanilla Mode Integrity**: When `mh_enabled 0` is set, daylight is restored and regular Counter-Strike gameplay is 100% unaffected.
+For the smoothest physics simulation and bot behavior in GoldSrc/Condition Zero:
+
+```ini
+// Server Engine Framerate Tuning
+sys_ticrate 100      // Ensures 100Hz server tickrate for smooth WalkMove stepping
+fps_max 100          // Consistent client framerate matching server ticks
+host_framerate 0     // Real-time server clock (do not lock to fixed delta)
+```
 
 ---
 
-## 10. Known Limitations & Technical Quirks (Current Branch)
+## 10. Performance, Stutter, Texture & Sound Upgrades (Latest Update)
 
-This branch contains the full Monster Hunt horror gamemode prototype with active bot AI and abilities. The following limitations and known issues are currently present in this build:
+The latest build resolves all six reported performance, render, sound, and movement issues:
 
-1. **Optimization**:
-   - The AI state machine, adaptive tracking heuristics (heat maps, player route prediction, flank path calculations), and teammate bot AI ticks run periodically in Pawn. On lower-end systems or high player/bot counts, this can cause CPU spikes or framerate drops.
-2. **Monster Textures & Skin Rendering**:
-   - Depending on the GoldSrc client renderer, OpenGL version, or video driver settings, the monster's model textures may fail to map or load on some client configurations, causing the zombie to appear as an untextured plain white or grey character model.
-3. **Persistent Background Ambience & Audio Loops**:
-   - Ambient horror sound effects (wind, eerie droning, and heartbeat proximity audio) may continue playing in the background without cleanly terminating when the round ends or during match resets.
-4. **Immediate Auto-Start on Match Launch**:
-   - When launching into any map, the match directly starts with the Monster Hunt horror mode turned on by default (`mh_enabled 1`), rather than waiting for an explicit player toggle.
-5. **Menu Complexity**:
-   - The in-game `/horror` control menu contains a large number of configuration options, presets, debug toggles, and sub-menus, which can feel cluttered and overwhelming during fast-paced gameplay.
-6. **Stuttery / Laggy Monster Movement**:
-   - Because the monster is driven as a custom server-side entity utilizing waypoint-to-waypoint vector steps (`MOVETYPE_STEP` and manual velocity adjustments) rather than native player client physics, its movement and turning can appear stuttery or laggy in-game.
+### 1. Performance & Engine Optimization
+- **FM_CmdStart & FM_PlaybackEvent Fast Bailouts**: When Monster Hunt is off (`mh_enabled 0`) or the monster is inactive, these high-frequency forwards return `FMRES_IGNORED` on the very first line with zero calculations or memory lookups.
+- **Raycast / Trace Budget (`mh_trace_budget 30`)**: `check_line_of_sight` tracks trace calls per second and caps expensive visibility checks at 30/s, preventing CPU spikes.
+- **Clean Ham Registration**: Ham hooks on `info_target` only execute when target is the active monster entity (`g_monsterEnt`).
+
+### 2. Zombie Model Textures Restored (Fix for White/Grey Model)
+- **Texture Submodel Companion (`models/zombiet.mdl`)**: Valve's official Half-Life zombie model relies on external texture companion submodel `zombiet.mdl` (57,248 bytes containing all 19 raw 8-bit mipmapped textures). `models/zombie.mdl` and `models/zombiet.mdl` are both packaged in `czero/models/` and explicitly precached.
+- **Clean Neutral Render Settings**: Fixed an issue where diffuse lighting was modulated with `{255, 255, 255}` at `renderamt 255.0`. The monster now spawns with default neutral render settings (`kRenderNormal`, `kRenderFxNone`, `renderamt 0.0`, `rendercolor {0,0,0}`, `scale 1.0`, `skin 0`, `body 0`).
+- **Subtle Optional Tint (`mh_tint`)**: If a subtle crimson aura is desired, set `mh_tint 1`. Otherwise, the model renders with 100% original Half-Life horror textures.
+- **In-Game Texture Verification Command**: Type `/mh_modeltest` in chat or `mh_modeltest` in console to spawn an inert zombie 85 units in front of you with default render settings to inspect textures.
+
+### 3. Immediate Background Sound & Loop Termination
+- **Unified Audio Cleanup (`stop_all_monster_sounds()`)**: Stops looping sounds (`SOUND_HEARTBEAT`, alert screams, pain audio, jumpscare sting) using `emit_sound(..., SND_STOP)` and executes `stopsound` across all connected clients.
+- Triggered automatically on:
+  - Round end (`logevent_round_end`)
+  - Monster death (`fw_monster_killed`)
+  - Mode toggle off (`mh_enabled 0`)
+  - Map change / plugin unload (`plugin_end`)
+  - Player disconnection (`client_disconnected`)
+
+### 4. Mode Startup Integrity (Starts in Regular Match)
+- **Default Off**: `mh_enabled` defaults to `0` in code and config.
+- **Enforced on Load**: `plugin_cfg()` guarantees `mh_enabled 0` at server launch, restoring default CS team balance, buy limits, and round timers.
+- **Queued Mode Toggle**: When an admin turns on Monster Hunt in the menu, it is queued for the **next round start**, giving players a clear announcement without disrupting an active match.
+- **Clean Config Persistence**: Auto-saved config always writes `mh_enabled 0` so server restarts never force players into Monster Hunt uninvited.
+
+### 5. Streamlined 5-Item Control Menu
+The `/horror` control panel has been redesigned into a clean 5-item menu:
+1. **Mode**: `[Regular Match (Standard CS)]` / `[Monster Hunt (ACTIVE)]` *(Admin only)*
+2. **Difficulty**: `[Easy]` / `[Normal]` / `[Nightmare]` / `[Custom]` *(Admin only)*
+3. **Atmosphere**: `[Off (Daylight Normal)]` / `[Light (Dusk)]` / `[Heavy (Midnight)]` *(Admin only)*
+4. **Bots: Fight & Flee**: `[ON]` / `[OFF]` *(Admin only)*
+5. **Advanced Settings (Admins Only) >**: Opens sub-menu for deep customization (Attributes, Senses, Abilities, UI & Gore, Telemetry, Spawn/Kill).
+
+### 6. Smooth Monster Movement & Decoupled Physics
+- **Dual Loop Architecture**:
+  - **Fast Movement Loop (25Hz, 0.04s)**: `task_monster_move` advances physics steps using `EngFunc_WalkMove` with smooth delta-time calculations.
+  - **Slow Decision Loop (4Hz, 0.25s)**: `monster_ai_tick` evaluates targets, pathfinding, and ability telegraphs without bogging down physics.
+- **Smooth Yaw Interpolation**: Monster angles rotate smoothly toward targets at 240 deg/sec via `approach_angle()` rather than snapping instantly.
+- **Animation Frame Preservation**: `set_monster_sequence` only resets `EV_FL_frame` to 0.0 when the sequence actually changes, allowing smooth GoldSrc animation cycles.
+- **Corner-Cutting Path Smoothing**: While following A* waypoints, if the monster has direct line of sight to waypoint `i+1`, it skips waypoint `i` immediately to prevent sharp zig-zags.
+
+---
+
+## 11. Verification Checklist
+
+- [x] **amxxpc.exe Compilation**: 0 errors, 0 warnings.
+- [x] **Model & Companion Textures**: `czero/models/zombie.mdl` and `zombiet.mdl` properly formatted, precached, and render default textures.
+- [x] **Sound Termination**: Loop sounds terminate immediately on round end, monster death, and map change.
+- [x] **Match Defaults**: Server boots into Regular Match; Monster Hunt requires explicit admin activation.
+- [x] **5-Item Menu**: Clean, easy-to-read menu with nested Advanced sub-menu.
+- [x] **Smooth 25Hz Stepping**: Monster navigates with smooth turning and un-jittered animation frames.
